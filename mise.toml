@@ -1,0 +1,8 @@
+min_version = "2025.6.0"
+
+[settings]
+idiomatic_version_file_enable_tools = ["python"]
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+_.file = ['.env', '.local.env']

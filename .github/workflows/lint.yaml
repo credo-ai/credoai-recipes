@@ -1,0 +1,29 @@
+name: Lint
+on:
+  pull_request: {}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+    - name: Install mise
+      uses: jdx/mise-action@v4
+      with:
+        install: true
+        cache: true
+    - name: Sync project dependencies
+      run: uv sync --locked --no-managed-python --no-python-downloads --link-mode=copy
+    - name: Lint
+      run: uv run ruff check .
+    - name: Check formatting
+      run: uv run ruff format --check .

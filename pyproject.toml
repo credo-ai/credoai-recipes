@@ -1,0 +1,46 @@
+[project]
+name = "credoai-recipes"
+version = "0.1.0"
+description = "Runnable recipes and example notebooks for the Credo AI platform"
+readme = "README.md"
+requires-python = ">=3.13,<4.0"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.0",
+    "jupyterlab>=4.4.0",
+    # Pinned exactly to match the ruff-pre-commit rev in .pre-commit-config.yaml.
+    # Different ruff versions format differently, which would make the `pre-commit`
+    # and `lint` CI jobs contradict each other. Bump both together.
+    "ruff==0.16.0",
+]
+
+[tool.uv]
+# This repo is a collection of runnable examples, not a distributable package.
+package = false
+default-groups = ["dev"]
+
+[tool.ruff]
+target-version = "py313"
+extend-exclude = ["**/__pycache__", "**/.ipynb_checkpoints"]
+
+[tool.ruff.lint]
+select = [
+    "E",       # pycodestyle errors
+    "W",       # pycodestyle warnings
+    "F",       # pyflakes
+    "I",       # isort
+    "C4",      # flake8-comprehensions
+    "ARG001",  # unused function arguments
+]
+ignore = [
+    "E501",  # line too long, handled by the formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Notebooks legitimately interleave imports with prose and demo unused names.
+"*.ipynb" = ["E402", "F401"]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true

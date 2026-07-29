@@ -1,0 +1,31 @@
+version: 2
+updates:
+- package-ecosystem: "github-actions"
+  directory: "/"
+  schedule:
+    interval: "weekly"
+    day: "saturday"
+    time: "03:33"
+    timezone: "Etc/GMT"
+  commit-message:
+    prefix: "chore(github-actions)"
+- package-ecosystem: "uv"
+  directory: "/"
+  schedule:
+    interval: "weekly"
+    day: "saturday"
+    time: "03:33"
+    timezone: "Etc/GMT"
+  commit-message:
+    prefix: "chore(deps)"
+# Without this ecosystem, pre-commit hook revs drift from the versions pinned in
+# `.tool-versions` -- which is exactly what happened in credoai-plugins.
+- package-ecosystem: "pre-commit"
+  directory: "/"
+  schedule:
+    interval: "weekly"
+    day: "saturday"
+    time: "03:33"
+    timezone: "Etc/GMT"
+  commit-message:
+    prefix: "chore(pre-commit)"

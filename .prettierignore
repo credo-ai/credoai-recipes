@@ -1,0 +1,8 @@
+node_modules/
+dist/
+build/
+.claude/
+.venv/
+.ipynb_checkpoints/
+.secrets.baseline
+uv.lock

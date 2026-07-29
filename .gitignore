@@ -1,0 +1,30 @@
+.DS_Store
+.vscode/
+.claude
+
+.env
+.local.env
+
+node_modules/
+
+.secrets.baseline.bak
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Tooling caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/

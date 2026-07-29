@@ -1,0 +1,14 @@
+# Keep the `formatter` rules aligned with `.yamllint.yaml` -- `indentless_arrays: true`
+# here pairs with `indent-sequences: false` there.
+formatter:
+  include_document_start: false
+  indentless_arrays: true
+  retain_line_breaks: true
+  scan_folded_as_literal: true
+  pad_line_comments: 2
+# The pre-commit hook only ever sees git-tracked files, but `yamlfmt -dstar '**/*.{yaml,yml}'`
+# run by hand would otherwise walk into the virtualenv and rewrite vendored YAML.
+exclude:
+- .venv/**
+- node_modules/**
+- .ipynb_checkpoints/**
