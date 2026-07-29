@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   pre-commit:
-    name: Pre-Commit Hooks
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
