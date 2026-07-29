@@ -22,7 +22,7 @@ repos:
 # Notebook output stripping -- MUST run before ruff so the formatters see
 # already-stripped notebooks. Recipes are committed without outputs.
 - repo: https://github.com/kynan/nbstripout
-  rev: 0.8.1
+  rev: 0.9.1
   hooks:
   - id: nbstripout
 
