@@ -44,7 +44,7 @@ repos:
 
 # Keep dependency lists in pyproject.toml sorted
 - repo: https://github.com/ninoseki/uv-sort
-  rev: v0.6.1
+  rev: v0.7.1
   hooks:
   - id: uv-sort
 
