@@ -68,9 +68,12 @@ All hooks run via `pre-commit` on staged files at commit time. CI runs on **pull
 the files changed in the PR (`--from-ref origin/$base_ref --to-ref HEAD`). Nothing runs on push to `main`, so
 run `pre-commit run --all-files` locally when you want full-tree coverage.
 
-A separate `Detect Secrets` workflow runs the org's shared
-[`gh-automation`](https://github.com/credo-ai/gh-automation) composite action on every PR, in addition to the
-`detect-secrets` pre-commit hook.
+A separate `Detect Secrets` workflow scans every tracked file on each PR, as a full-tree backstop to the
+changed-files-only `detect-secrets` pre-commit hook.
+
+**Do not reference `credo-ai/gh-automation` (or any other private repo) from a workflow here.** This
+repository is public, so private composite actions cannot be resolved. The detect-secrets steps are inlined
+for exactly this reason — see the comment at the top of `.github/workflows/detect-secrets.yaml`.
 
 ## Common Commands
 
