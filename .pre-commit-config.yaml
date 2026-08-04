@@ -50,7 +50,7 @@ repos:
 
 # Markdown formatting -- prettier is the canonical Markdown formatter for this repo
 - repo: https://github.com/rbubley/mirrors-prettier
-  rev: v3.8.3
+  rev: v3.9.6
   hooks:
   - id: prettier
     types: [markdown]
