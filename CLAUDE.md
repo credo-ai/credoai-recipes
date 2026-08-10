@@ -5,20 +5,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository Overview
 
 This is **Credo AI Recipes** — a public collection of runnable examples for the
-[Credo AI](https://www.credo.ai) platform. Each recipe is a Python script or Jupyter notebook that
-demonstrates one task end to end.
+[Credo AI](https://www.credo.ai) platform. It holds two kinds of content:
 
-It is deliberately **not a distributable package** (`package = false` in `pyproject.toml`). There is nothing
-to build, version, or publish. Recipes are read and run, not imported.
+- `integrations/<system>/<pattern>/` — cookbooks connecting an external system to Credo AI. Each is
+  self-contained: README, `.env.example`, `TESTING.md`, and either a `server/{python,typescript}/` app
+  (delivery type: cookbook) or an in-platform script documented in the README (delivery type: native
+  integration — nothing to run here, config/script lives in the target system).
+- Top-level `.py` scripts or `.ipynb` notebooks — one task against the Credo AI SDK directly, end to end.
+
+The SDK-facing part of this repo is deliberately **not a distributable package** (`package = false` in
+`pyproject.toml`). There is nothing to build, version, or publish for that half. Integrations are their own
+thing — each one pins its own deps (`requirements.txt` / `package.json`) inside its folder, independent of
+the root `uv`/`pyproject.toml` setup.
 
 ## Repository Structure
 
 ```
 .
 ├── .github/workflows/       # CI: pre-commit + ruff, detect-secrets
+├── .github/ISSUE_TEMPLATE/  # integration_request.md — the custom-integration-request path
 ├── pyproject.toml           # Python version, dev deps, ruff config
 ├── uv.lock                  # Locked dev dependencies
 ├── example.env              # Commented credential placeholders
+├── integrations/            # cookbooks — see integrations/README.md
 └── <recipes>                # .py scripts and .ipynb notebooks
 ```
 
