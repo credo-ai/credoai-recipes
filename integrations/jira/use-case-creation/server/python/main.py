@@ -1,12 +1,13 @@
 import os
+
 import httpx
 from fastapi import FastAPI, Request
 
 app = FastAPI()
 
 BASE_URL = os.environ["CREDO_BASE_URL"]
-API_KEY  = os.environ["CREDO_API_KEY"]
-TENANT   = os.environ["CREDO_TENANT"]
+API_KEY = os.environ["CREDO_API_KEY"]
+TENANT = os.environ["CREDO_TENANT"]
 
 
 def get_token() -> str:
@@ -41,8 +42,8 @@ async def jira_webhook(request: Request):
         return {"message": "ignored"}
 
     issue = payload["issue"]
-    name  = f"[{issue['key']}] {issue['fields']['summary']}"
-    desc  = issue["fields"].get("description", "")
+    name = f"[{issue['key']}] {issue['fields']['summary']}"
+    desc = issue["fields"].get("description", "")
 
     use_case = create_use_case(name, desc)
     return {"use_case_id": use_case["id"]}

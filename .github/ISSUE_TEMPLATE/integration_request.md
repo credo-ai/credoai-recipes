@@ -12,6 +12,7 @@ e.g. Workday, SAP, Okta
 e.g. When a new AI system is added in Workday, create a use case in Credo AI
 
 **Integration type**
+
 - [ ] Use case creation
 - [ ] Model / vendor registry sync
 - [ ] GRC / data catalog
@@ -22,6 +23,7 @@ e.g. When a new AI system is added in Workday, create a use case in Credo AI
 e.g. HR engineering team, AI governance lead
 
 **How urgent is this?**
+
 - [ ] Blocking a project
 - [ ] Nice to have
 - [ ] Just exploring

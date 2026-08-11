@@ -10,12 +10,12 @@ When a new issue is created in JIRA, a webhook fires and automatically creates a
 
 ## Prerequisites
 
-| Item | Where to get it |
-|---|---|
-| Integration Service base URL | Provided by Credo AI |
-| API key | Credo AI Governance App → Settings → Integrations |
-| Tenant name | Your org's tenant identifier in Credo AI |
-| JIRA admin access | To create and configure webhooks |
+| Item                         | Where to get it                                   |
+| ---------------------------- | ------------------------------------------------- |
+| Integration Service base URL | Provided by Credo AI                              |
+| API key                      | Credo AI Governance App → Settings → Integrations |
+| Tenant name                  | Your org's tenant identifier in Credo AI          |
+| JIRA admin access            | To create and configure webhooks                  |
 
 ---
 
@@ -30,16 +30,17 @@ cp .env.example .env
 
 ## Step 2: Field mapping
 
-| Credo AI Field | Your JIRA Field | Example |
-|---|---|---|
-| Use Case Name | (your field) | `issue.fields.summary` |
-| Use Case Description | (your field) | `issue.fields.description` |
+| Credo AI Field       | Your JIRA Field | Example                    |
+| -------------------- | --------------- | -------------------------- |
+| Use Case Name        | (your field)    | `issue.fields.summary`     |
+| Use Case Description | (your field)    | `issue.fields.description` |
 
 ---
 
 ## Step 3: Run the server
 
 **Python:**
+
 ```bash
 cd server/python
 pip install -r requirements.txt
@@ -47,6 +48,7 @@ uvicorn main:app --port 5000
 ```
 
 **TypeScript:**
+
 ```bash
 cd server/typescript
 npm install
@@ -88,14 +90,14 @@ Expected: `{"use_case_id": "uc_..."}`
 
 ## Troubleshooting
 
-| Symptom | Likely Cause | Fix |
-|---|---|---|
-| 401 on token exchange | Wrong `CREDO_API_KEY` or `CREDO_TENANT` | Check `.env` values |
-| 404 Not Found | Wrong `CREDO_BASE_URL` | Confirm base URL with Credo AI |
-| 400 / 422 Bad Request | Malformed payload | Check server logs |
-| Use case blank name | `summary` field missing | Check JIRA issue type |
-| `'ignored'` for every event | Wrong event type in JIRA | Confirm **Issue → created** is checked |
-| JIRA delivery failed | Endpoint not reachable | Verify ngrok or deployment URL |
+| Symptom                     | Likely Cause                            | Fix                                    |
+| --------------------------- | --------------------------------------- | -------------------------------------- |
+| 401 on token exchange       | Wrong `CREDO_API_KEY` or `CREDO_TENANT` | Check `.env` values                    |
+| 404 Not Found               | Wrong `CREDO_BASE_URL`                  | Confirm base URL with Credo AI         |
+| 400 / 422 Bad Request       | Malformed payload                       | Check server logs                      |
+| Use case blank name         | `summary` field missing                 | Check JIRA issue type                  |
+| `'ignored'` for every event | Wrong event type in JIRA                | Confirm **Issue → created** is checked |
+| JIRA delivery failed        | Endpoint not reachable                  | Verify ngrok or deployment URL         |
 
 Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
 
