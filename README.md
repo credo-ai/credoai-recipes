@@ -1,10 +1,24 @@
 # Credo AI Recipes
 
-Runnable recipes for the [Credo AI](https://www.credo.ai) platform — Python examples and Jupyter
-notebooks that show how to do a specific thing end to end.
+Runnable examples for the [Credo AI](https://www.credo.ai) platform. Two kinds live here:
 
-A recipe is small, self-contained, and runnable from a clean checkout. If it needs credentials, it reads
-them from the environment and says so up front.
+- **Integrations** (`integrations/`) — connect an external system (JIRA, ServiceNow, ...) to Credo AI.
+  Each one is a full cookbook: README, env vars, and either a runnable server or an in-platform script.
+- **Recipes** — standalone Python scripts or Jupyter notebooks showing how to do one thing end to end
+  against the Credo AI SDK directly.
+
+Both are small, self-contained, and runnable from a clean checkout. If something needs credentials, it
+reads them from the environment and says so up front.
+
+## Integrations
+
+| Target System                                             | Integration Pattern | Delivery Type                  | Status       |
+| --------------------------------------------------------- | ------------------- | ------------------------------ | ------------ |
+| [JIRA](./integrations/jira/use-case-creation)             | Use Case Intake     | Cookbook (run your own server) | ✅ Available |
+| [ServiceNow](./integrations/servicenow/use-case-creation) | Use Case Intake     | Native Integration (no server) | ✅ Available |
+
+See [integrations/README.md](./integrations/README.md) for the full quick start. Don't see what you need?
+[Open an integration request](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md).
 
 ## Prerequisites
 
