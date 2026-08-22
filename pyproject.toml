@@ -13,7 +13,7 @@ dev = [
     # Pinned exactly to match the ruff-pre-commit rev in .pre-commit-config.yaml.
     # Different ruff versions format differently, which would make the `pre-commit`
     # and `lint` CI jobs contradict each other. Bump both together.
-    "ruff==0.16.0",
+    "ruff==0.16.3",
 ]
 
 [tool.uv]
