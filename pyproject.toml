@@ -10,6 +10,10 @@ dependencies = []
 dev = [
     "ipykernel>=6.29.0",
     "jupyterlab>=4.4.0",
+    "openpyxl>=3.1.5",
+    "pycredoai>=1.2.1",
+    "python-dotenv>=1.2.3",
+    "requests>=2.34.2",
     # Pinned exactly to match the ruff-pre-commit rev in .pre-commit-config.yaml.
     # Different ruff versions format differently, which would make the `pre-commit`
     # and `lint` CI jobs contradict each other. Bump both together.
