@@ -12,6 +12,7 @@ Each recipe is self-contained — clone, configure, and run.
 | -------------------------------------------- | ------------------- | ------------------------------------------------------ | ------------ |
 | [JIRA](./jira/use-case-creation)             | Use Case Intake     | Cookbook (run your own server)                         | ✅ Available |
 | [ServiceNow](./servicenow/use-case-creation) | Use Case Intake     | Native Integration (runs inside ServiceNow, no server) | ✅ Available |
+| [Splunk](./splunk/shadow-ai-event-ingestion) | Shadow AI Event Ingestion | Cookbook (run your own poller, no inbound webhook) | 🧪 Preview — talks to a backend API directly |
 
 More systems and patterns are on the [request board](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md) — see [Request an integration](#request-an-integration) below.
 

@@ -16,6 +16,7 @@ reads them from the environment and says so up front.
 | --------------------------------------------------------- | ------------------- | ------------------------------ | ------------ |
 | [JIRA](./integrations/jira/use-case-creation)             | Use Case Intake     | Cookbook (run your own server) | ✅ Available |
 | [ServiceNow](./integrations/servicenow/use-case-creation) | Use Case Intake     | Native Integration (no server) | ✅ Available |
+| [Splunk](./integrations/splunk/shadow-ai-event-ingestion) | Shadow AI Event Ingestion | Cookbook (run your own poller) | 🧪 Preview — talks to a backend API directly |
 
 See [integrations/README.md](./integrations/README.md) for the full quick start. Don't see what you need?
 [Open an integration request](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md).
