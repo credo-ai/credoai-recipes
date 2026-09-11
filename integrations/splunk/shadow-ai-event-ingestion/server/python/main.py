@@ -385,7 +385,10 @@ def main() -> None:
     )
     # Separate clients: SPLUNK_VERIFY_SSL (often false for a lab's self-signed
     # cert) must never apply to the Credo AI client, which always verifies.
-    with httpx.Client(verify=SPLUNK_VERIFY_SSL) as splunk_client, httpx.Client() as credo_http:
+    with (
+        httpx.Client(verify=SPLUNK_VERIFY_SSL) as splunk_client,
+        httpx.Client() as credo_http,
+    ):
         credo = CredoClient(credo_http)
         while True:
             try:

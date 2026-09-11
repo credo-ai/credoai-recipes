@@ -54,15 +54,15 @@ seen, so a restart never re-sends events already delivered.
 
 ## Prerequisites
 
-| Item                          | Where to get it                                        |
-| ------------------------------ | ------------------------------------------------------- |
+| Item                           | Where to get it                                                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **`SHADOW_AI` entitlement**    | **Must be enabled on your Credo AI tenant — ask your Credo AI representative. Without it, the bulk endpoint returns `404` and no events are ingested.** |
-| Integration Service base URL   | Provided by Credo AI                                     |
-| Backend base URL                | Provided by Credo AI — see the preview note above; different host from the Integration Service base URL |
-| API key                        | Credo AI Governance App → Settings → Integrations        |
-| Tenant name                    | Your org's tenant identifier in Credo AI                  |
-| Splunk REST access (port 8089) | Reachable from wherever you run this poller               |
-| A Splunk service account       | See Step 2 — **read-only**, scoped to one index, not admin |
+| Integration Service base URL   | Provided by Credo AI                                                                                                                                    |
+| Backend base URL               | Provided by Credo AI — see the preview note above; different host from the Integration Service base URL                                                 |
+| API key                        | Credo AI Governance App → Settings → Integrations                                                                                                       |
+| Tenant name                    | Your org's tenant identifier in Credo AI                                                                                                                |
+| Splunk REST access (port 8089) | Reachable from wherever you run this poller                                                                                                             |
+| A Splunk service account       | See Step 2 — **read-only**, scoped to one index, not admin                                                                                              |
 
 ---
 
@@ -91,17 +91,17 @@ Edit `.env` to match your Splunk instance's actual index/sourcetype, and edit
 the SPL search in `main.py` (`SEARCH_TEMPLATE`) if your fields are named
 differently. Then map your fields to Credo AI's schema:
 
-| Credo AI Field         | Your Splunk Field (example)   | Notes                                   |
-| ----------------------- | ------------------------------ | ---------------------------------------- |
-| `timestamp`             | `_time`                        | required — events without a parseable time are dropped |
-| `user_email`            | `user_email` / `user`          | who took the action                      |
-| `app_name`              | `app_name` / `app`             | e.g. "ChatGPT", "GitHub Copilot" — drives `/ai-discovery/ai-tools` |
-| `category`              | `category`                     | e.g. `chatbot`, `code_assistant`, `image_generation` |
-| `action`                | `action`                       | e.g. "Allowed", "Blocked"                |
-| `url` / `referrer_url`  | `url` / `referrer_url`         | optional                                 |
-| `department`            | `department`                   | optional                                 |
-| `device_hostname`       | `device_hostname`              | optional                                 |
-| `risk_score`            | `risk_score`                   | optional, clamped 0–100 on send          |
+| Credo AI Field         | Your Splunk Field (example) | Notes                                                              |
+| ---------------------- | --------------------------- | ------------------------------------------------------------------ |
+| `timestamp`            | `_time`                     | required — events without a parseable time are dropped             |
+| `user_email`           | `user_email` / `user`       | who took the action                                                |
+| `app_name`             | `app_name` / `app`          | e.g. "ChatGPT", "GitHub Copilot" — drives `/ai-discovery/ai-tools` |
+| `category`             | `category`                  | e.g. `chatbot`, `code_assistant`, `image_generation`               |
+| `action`               | `action`                    | e.g. "Allowed", "Blocked"                                          |
+| `url` / `referrer_url` | `url` / `referrer_url`      | optional                                                           |
+| `department`           | `department`                | optional                                                           |
+| `device_hostname`      | `device_hostname`           | optional                                                           |
+| `risk_score`           | `risk_score`                | optional, clamped 0–100 on send                                    |
 
 If your Splunk data comes from a specific CASB TA, its field names almost
 certainly differ from the example column above — adjust the `FIELD_MAP` dict
@@ -134,14 +134,14 @@ a small sandbox one.
 
 ## Troubleshooting
 
-| Symptom                                  | Likely Cause                                  | Fix                                              |
-| ----------------------------------------- | ---------------------------------------------- | -------------------------------------------------- |
-| `401` on `/auth/token`                    | Wrong `CREDO_API_KEY` or `CREDO_TENANT`        | Check `.env` values                                |
-| `404` on bulk POST                        | `SHADOW_AI` entitlement not enabled, or wrong `CREDO_BACKEND_BASE_URL` | Confirm the entitlement and backend base URL with Credo AI. The poller logs a `WARNING`, treats the batch as permanently dropped (not retryable), and moves on to the next batch rather than stalling the cycle |
-| Splunk search returns nothing             | Wrong `SPLUNK_INDEX` / `SPLUNK_SOURCETYPE`, or `earliest` past your checkpoint | Check `.env`; delete `checkpoint.txt` to reset the cursor |
-| All fields null on ingested events        | Splunk's `| fields ...` clause not listing your field names | Update `SEARCH_TEMPLATE` in `main.py`             |
-| Duplicate events after a restart          | Checkpoint file deleted or not persisted        | Confirm `CHECKPOINT_PATH` points at durable storage, not a tmpfs that clears on restart. Checkpoint is saved after every batch, and an in-memory fingerprint cache skips re-sending anything already delivered in the current process, so a restart can only duplicate the one batch that was in flight at crash time |
-| Poller runs but nothing ever sends        | `risk_score`/timestamp parsing rejecting every event | Check poller logs for per-cycle `malformed` count |
+| Symptom                            | Likely Cause                                                                   | Fix                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `401` on `/auth/token`             | Wrong `CREDO_API_KEY` or `CREDO_TENANT`                                        | Check `.env` values                                                                                                                                                                                                                                                                                                   |
+| `404` on bulk POST                 | `SHADOW_AI` entitlement not enabled, or wrong `CREDO_BACKEND_BASE_URL`         | Confirm the entitlement and backend base URL with Credo AI. The poller logs a `WARNING`, treats the batch as permanently dropped (not retryable), and moves on to the next batch rather than stalling the cycle                                                                                                       |
+| Splunk search returns nothing      | Wrong `SPLUNK_INDEX` / `SPLUNK_SOURCETYPE`, or `earliest` past your checkpoint | Check `.env`; delete `checkpoint.txt` to reset the cursor                                                                                                                                                                                                                                                             |
+| All fields null on ingested events | Splunk's `                                                                     | fields ...` clause not listing your field names                                                                                                                                                                                                                                                                       | Update `SEARCH_TEMPLATE` in `main.py` |
+| Duplicate events after a restart   | Checkpoint file deleted or not persisted                                       | Confirm `CHECKPOINT_PATH` points at durable storage, not a tmpfs that clears on restart. Checkpoint is saved after every batch, and an in-memory fingerprint cache skips re-sending anything already delivered in the current process, so a restart can only duplicate the one batch that was in flight at crash time |
+| Poller runs but nothing ever sends | `risk_score`/timestamp parsing rejecting every event                           | Check poller logs for per-cycle `malformed` count                                                                                                                                                                                                                                                                     |
 
 Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
 
