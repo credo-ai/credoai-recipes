@@ -1,4 +1,3 @@
----
 evidence_requirements:
 - evidence_type: metric
   code_template: |
