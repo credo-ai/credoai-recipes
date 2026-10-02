@@ -12,11 +12,13 @@ reads them from the environment and says so up front.
 
 ## Integrations
 
-| Target System                                             | Integration Pattern       | Delivery Type                  | Status                                       |
-| --------------------------------------------------------- | ------------------------- | ------------------------------ | -------------------------------------------- |
-| [JIRA](./integrations/jira/use-case-creation)             | Use Case Intake           | Cookbook (run your own server) | ✅ Available                                 |
-| [ServiceNow](./integrations/servicenow/use-case-creation) | Use Case Intake           | Native Integration (no server) | ✅ Available                                 |
-| [Splunk](./integrations/splunk/shadow-ai-event-ingestion) | Shadow AI Event Ingestion | Cookbook (run your own poller) | 🧪 Preview — talks to a backend API directly |
+| Target System                                                                      | Integration Pattern       | Delivery Type                  | Status                                              |
+| ---------------------------------------------------------------------------------- | ------------------------- | ------------------------------ | --------------------------------------------------- |
+| [JIRA](./integrations/jira/use-case-creation)                                      | Use Case Intake           | Cookbook (run your own server) | ✅ Available                                        |
+| [ServiceNow](./integrations/servicenow/use-case-creation)                          | Use Case Intake           | Native Integration (no server) | ✅ Available                                        |
+| [Splunk](./integrations/splunk/shadow-ai-event-ingestion)                          | Shadow AI Event Ingestion | Cookbook (run your own poller) | 🧪 Preview — talks to a backend API directly        |
+| [Databricks (Workspace Registry)](./integrations/databricks/mlflow-model-registry) | Model Registry Sync       | Cookbook (run your own server) | 🧪 Preview — legacy Workspace Model Registry only   |
+| [Databricks (Unity Catalog)](./integrations/databricks/unity-catalog-registry)     | Model Registry Sync       | Cookbook (run your own poller) | 🧪 Preview — polling; Unity Catalog has no webhooks |
 
 See [integrations/README.md](./integrations/README.md) for the full quick start. Don't see what you need?
 [Open an integration request](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md).
