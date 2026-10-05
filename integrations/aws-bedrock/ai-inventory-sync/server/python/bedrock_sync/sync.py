@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from bedrock_sync.agentcore import AgentCoreResource
 from bedrock_sync.bedrock import BedrockModel, resolve_model_key
@@ -48,28 +48,31 @@ SOURCE = "Amazon Bedrock"
 # module free of any HTTP dependency: the orchestration below never imports
 # `CredoClient`, so it can be read, reasoned about and driven by any object
 # that satisfies these signatures.
+# The four Protocols below take the SDK's response objects as `Any`: they are
+# `pycredoai` models, and naming them here would pull the SDK into this module,
+# which is exactly the dependency these Protocols exist to avoid.
 class ModelSink(Protocol):
-    def list_models(self) -> list[dict]: ...
-    def create_model(self, attrs: dict) -> dict: ...
-    def patch_model(self, model_id: str, attrs: dict) -> dict: ...
+    def list_models(self) -> list[Any]: ...
+    def create_model(self, attrs: dict) -> Any: ...
+    def patch_model(self, model_id: str, attrs: dict) -> Any: ...
 
 
 class UseCaseSink(Protocol):
-    def list_use_cases(self) -> list[dict]: ...
-    def create_use_case(self, attrs: dict) -> dict: ...
-    def patch_use_case(self, use_case_id: str, attrs: dict) -> dict: ...
+    def list_use_cases(self) -> list[Any]: ...
+    def create_use_case(self, attrs: dict) -> Any: ...
+    def patch_use_case(self, use_case_id: str, attrs: dict) -> Any: ...
 
 
 class VendorSink(Protocol):
-    def list_vendors(self) -> list[dict]: ...
-    def create_vendor(self, name: str) -> dict: ...
-    def list_vendor_models(self, vendor_id: str) -> list[dict]: ...
-    def add_model_vendor(self, model_id: str, vendor_id: str) -> dict: ...
+    def list_vendors(self) -> list[Any]: ...
+    def create_vendor(self, name: str) -> Any: ...
+    def list_vendor_models(self, vendor_id: str) -> list[Any]: ...
+    def add_model_vendor(self, model_id: str, vendor_id: str) -> Any: ...
 
 
 class UseCaseModelSink(Protocol):
-    def list_use_case_models(self, use_case_id: str) -> list[dict]: ...
-    def add_use_case_model(self, use_case_id: str, model_id: str) -> dict: ...
+    def list_use_case_models(self, use_case_id: str) -> list[Any]: ...
+    def add_use_case_model(self, use_case_id: str, model_id: str) -> Any: ...
 
 
 @dataclass
@@ -213,7 +216,7 @@ def sync_vendors(
 
     # Matched case-insensitively: vendor names are uniquely constrained server
     # side, so creating "Anthropic" where "anthropic" exists would 422.
-    existing = {v["name"].casefold(): v["id"] for v in credo.list_vendors()}
+    existing = {v.name.casefold(): v.id for v in credo.list_vendors()}
 
     for provider, provider_models in by_provider.items():
         try:
@@ -251,7 +254,7 @@ def _sync_vendor(
             summary.vendors_created += 1
             summary.linked += len(models)
             return
-        vendor_id = credo.create_vendor(provider)["id"]
+        vendor_id = credo.create_vendor(provider).id
         existing[provider.casefold()] = vendor_id
         summary.vendors_created += 1
         fresh = True
@@ -259,7 +262,7 @@ def _sync_vendor(
 
     # A vendor created a moment ago has no links, so reading them is a wasted
     # round trip.
-    linked = set() if fresh else {m["id"] for m in credo.list_vendor_models(vendor_id)}
+    linked = set() if fresh else {m.id for m in credo.list_vendor_models(vendor_id)}
 
     for model in models:
         model_id = synced.ids.get(model.name)
@@ -384,7 +387,7 @@ def _link(
         summary.linked += 1
         return
 
-    if model_id in {m["id"] for m in credo.list_use_case_models(use_case_id)}:
+    if model_id in {m.id for m in credo.list_use_case_models(use_case_id)}:
         summary.already_linked += 1
         return
 
@@ -415,9 +418,9 @@ class _Target:
 
     noun: str  # "model" | "use case"
     field: str  # "summary" | "description"
-    list_items: Callable[[], list[dict]]
-    create: Callable[[dict], dict]
-    patch: Callable[[str, dict], dict]
+    list_items: Callable[[], list[Any]]
+    create: Callable[[dict], Any]
+    patch: Callable[[str, dict], Any]
 
 
 def _sync(
@@ -433,7 +436,7 @@ def _sync(
         return summary
 
     # One listing per cycle, reused for every record — not one lookup each.
-    existing = {item["name"]: item for item in target.list_items()}
+    existing = {item.name: item for item in target.list_items()}
 
     for record in records:
         try:
@@ -456,7 +459,7 @@ def _upsert(
     record: _Record,
     target: _Target,
     *,
-    existing: dict[str, dict],
+    existing: dict[str, Any],
     dry_run: bool,
     summary: SyncSummary,
 ) -> None:
@@ -474,23 +477,19 @@ def _upsert(
             # Two listings surfacing the same name in one cycle must not POST
             # twice into a name-unique registry — record the write here so the
             # second occurrence sees it.
-            existing[record.name] = {
-                **created,
-                "name": record.name,
-                target.field: record.text,
-            }
-            summary.ids[record.name] = created["id"]
-            logger.info("Created %s %r (%s)", target.noun, record.name, created["id"])
+            existing[record.name] = created
+            summary.ids[record.name] = created.id
+            logger.info("Created %s %r (%s)", target.noun, record.name, created.id)
         summary.created += 1
         return
 
-    summary.ids[record.name] = current["id"]
+    summary.ids[record.name] = current.id
 
     # Skip the write when nothing changed. The text field is absent from the
     # listing on any API version that doesn't return it, in which case this
     # comparison never matches and the cycle degrades to patching everything
     # every run — chatty, but never wrong. See README "Limitations".
-    if current.get(target.field) == record.text:
+    if getattr(current, target.field, None) == record.text:
         summary.unchanged += 1
         return
 
@@ -499,6 +498,6 @@ def _upsert(
             "[dry-run] would update %s %s %r", record.kind, target.noun, record.name
         )
     else:
-        target.patch(current["id"], {target.field: record.text})
-        logger.info("Updated %s %r (%s)", target.noun, record.name, current["id"])
+        target.patch(current.id, {target.field: record.text})
+        logger.info("Updated %s %r (%s)", target.noun, record.name, current.id)
     summary.updated += 1

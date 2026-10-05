@@ -4,6 +4,7 @@ A scheduled command that reads your Amazon Bedrock account and keeps Credo AI cu
 models and agents that actually exist in it — no forms, no manual entry.
 
 - All code runs in your own environment, wherever it can reach AWS and Credo AI
+- Writes go through the official [`pycredoai`](https://pypi.org/project/pycredoai/) SDK
 - **No AWS credentials are stored by this cookbook** — it uses boto3's default credential chain, so
   there is nothing here to leak
 - Every AWS call is read-only; the sync cannot change anything in your AWS account
@@ -134,8 +135,8 @@ python ensure_credo_source.py
 Expect `Created source 'Amazon Bedrock'` or `already exists`. Idempotent, safe to re-run, and needed
 **once per tenant**.
 
-> This one setup script uses Credo AI's v2 admin API, because the public Integration Service has no
-> `/sources` endpoint. Everything the sync itself does uses the public API.
+> This one setup script uses Credo AI's v2 admin API, because neither the SDK nor the Integration
+> Service exposes `/sources` yet. Everything the sync itself does goes through the SDK.
 >
 > It defaults to `CREDO_API_BASE_URL`, which is correct for a hosted tenant where both APIs sit
 > behind one host. If yours serves them separately — a local or self-hosted stack usually does —
@@ -259,6 +260,11 @@ rule like `global.anthropic.claude-sonnet-4-6` — rather than a model id, becau
 profiles for cross-region capacity. The registry only ever holds model ids, so the sync resolves
 profiles through `ListInferenceProfiles` before linking. A profile routing to more than one distinct
 model is skipped rather than guessed at.
+
+**The SDK does the talking.** Authentication, pagination and response typing all come from
+`pycredoai`, so this cookbook contains no HTTP client of its own — `bedrock_sync/credo.py` is a thin
+adapter exposing just the operations the sync needs. It does not retry: a transient 5xx fails that
+record, the rest of the cycle continues, and the next scheduled run picks it up.
 
 **Nothing is stored locally.** The run has to read Credo AI anyway to work out what changed, so Credo
 AI is the state store. There is no checkpoint file to corrupt or reset.

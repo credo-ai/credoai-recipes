@@ -1,4 +1,10 @@
 boto3==1.43.96
+pycredoai==1.3.0
+
+# Only used by ensure_credo_source.py, the one-time setup script: neither the
+# SDK nor the Integration Service exposes /sources yet, so it calls the admin
+# API directly. The sync itself holds no HTTP client of its own.
 httpx==0.28.1
+
 pydantic-settings==2.15.0
 python-dotenv==1.2.3

@@ -24,7 +24,7 @@ import argparse
 import logging
 import sys
 
-import httpx
+from credoai.errors import CredoAIError
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -32,7 +32,7 @@ from bedrock_sync import sync
 from bedrock_sync.agentcore import AgentCoreReader
 from bedrock_sync.bedrock import AWS_ERRORS, BedrockReader
 from bedrock_sync.config import _ENV_FILE, get_settings
-from bedrock_sync.credo import CredoApiError, CredoClient
+from bedrock_sync.credo import CredoClient
 
 logger = logging.getLogger("bedrock_sync.cli")
 
@@ -72,14 +72,6 @@ def _build_parser() -> argparse.ArgumentParser:
 def run(args: argparse.Namespace) -> int:
     settings = get_settings()
 
-    # Checked before any AWS call: enumerating a whole Bedrock account only to
-    # fail on a missing API key wastes a minute and points the blame at AWS.
-    if not settings.credo_api_key or not settings.credo_tenant:
-        raise CredoApiError(
-            "CREDO_API_KEY and CREDO_TENANT are required. Copy .env.example to "
-            ".env at the cookbook root and fill them in — see README Step 1."
-        )
-
     all_foundation = (
         settings.bedrock_sync_all_foundation_models
         if args.all_foundation_models is None
@@ -88,6 +80,17 @@ def run(args: argparse.Namespace) -> int:
     include_agentcore = (
         settings.bedrock_sync_agentcore if args.agentcore is None else args.agentcore
     )
+
+    # Connect to Credo AI before touching AWS. The SDK authenticates inside its
+    # constructor, so a missing key or an unreachable host is reported in a
+    # second instead of after a full Bedrock enumeration.
+    try:
+        credo = CredoClient(settings)
+    except ValueError as exc:
+        raise CredoAIError(
+            f"{exc} Copy .env.example to .env at the cookbook root and fill it "
+            "in — see README Step 1."
+        ) from exc
 
     # Agents are read first: narrowing the catalog to the models they name means
     # knowing what they name before the models are fetched.
@@ -126,7 +129,7 @@ def run(args: argparse.Namespace) -> int:
         include_inference_profiles=include_agentcore,
     )
 
-    with CredoClient(settings) as credo:
+    with credo:
         model_summary = sync.sync_models(
             inventory.models, credo=credo, dry_run=args.dry_run
         )
@@ -225,16 +228,16 @@ def main() -> None:
 
     try:
         rc = run(args)
-    except CredoApiError as exc:
+    except CredoAIError as exc:
+        # Every SDK failure lands here — bad key, unreachable host, rejected
+        # payload. The run never started, so it exits 2 like any other
+        # configuration problem.
         logger.error("Credo AI: %s", exc)
-        sys.exit(2)
-    except httpx.RequestError as exc:
-        # Unreachable host, refused connection, DNS failure, TLS error: the run
-        # never started, so it exits 2 like any other configuration problem.
         logger.error(
-            "Credo AI at %s is unreachable: %s", settings.credo_api_base_url, exc
+            "Check CREDO_API_KEY, CREDO_TENANT and CREDO_API_BASE_URL in .env, "
+            "and that %s is reachable.",
+            settings.credo_api_base_url,
         )
-        logger.error("Check CREDO_API_BASE_URL in .env, and that the host is up.")
         sys.exit(2)
     except AWS_ERRORS as exc:
         # Client construction itself failed — no region, no credentials. Per
