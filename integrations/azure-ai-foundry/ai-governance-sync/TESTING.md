@@ -70,7 +70,8 @@ python main.py -v
 Confirm all four summary lines appear (unless a domain was skipped — see README Step 3), and that
 the run's exit code is `0` (or `1` with an explained error — see Step 6). The first-ever run against
 a fresh tenant also creates the "Azure AI Foundry" `Source` record automatically, as part of the
-models sync — no separate step, and safe to happen on every run after that too.
+models sync — no separate step. On every run after that the same create is attempted again and Credo
+AI answers `422` (already exists), which the sync accepts.
 
 ---
 
@@ -91,9 +92,15 @@ custom fields  scanned=N created=0 updated=0 skipped=N errors=0
 questionnaire  scanned=1 created=0 updated=0 skipped=1 errors=0
 ```
 
-If controls show `updated=N` instead of `skipped=N` on a clean second run, something's off —
-either the local `config/` content and what got published on the first run genuinely differ (check
-`--dry-run -v`, it names which controls and why), or the content-comparison logic itself has a bug.
+The only write attempt you should see in the log is `POST .../sources` returning `422`; no control,
+custom field, model or questionnaire write should appear. The log also carries one warning naming
+`evidence_requirements[].governance_bounds` — Credo AI doesn't return that field, so it is left out
+of the control comparison (see README, "How it matches records").
+
+If controls or the questionnaire show `updated=N` instead of `skipped=N` on a clean second run,
+something's off — either the local `config/` content and what got published on the first run
+genuinely differ (check `--dry-run -v`, it names which controls and why), or the content-comparison
+logic itself has a bug.
 
 **Content-change detection.** Edit one control's latest `vN.yaml` (e.g. tweak `MSFT-BLEU`'s
 `description` under `info`), then:
@@ -106,6 +113,16 @@ Confirm the log names that one control specifically ("latest published version d
 every other control still says "unchanged, would skip." Revert the edit afterward, or the next
 real run will publish a version you didn't mean to.
 
+Do the same for the questionnaire: change one question's text in `config/azure_questionnaire.json`
+and run
+
+```bash
+python main.py --dry-run -v --skip-models --skip-controls --skip-custom-fields
+```
+
+Expect `[dry-run] would publish a new version of questionnaire 'DEFAULT_AZURE'`; with the edit
+reverted it must say `unchanged, skipping`. Reordering two questions counts as a change too.
+
 ---
 
 ## Step 6: Failure modes
@@ -115,7 +132,7 @@ Each of these must degrade, not crash. Check the exit code every time.
 | Scenario                     | How to trigger                               | Expected                                                                                              |
 | ---------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Bad Azure client secret      | Corrupt `AZURE_CLIENT_SECRET`                | Exit `2`, readable message, no partial writes                                                         |
-| Bad Credo AI credentials     | Corrupt `CREDO_API_TOKEN`                    | Exit `2`, readable message, no partial writes                                                         |
+| Bad Credo AI credentials     | Corrupt `CREDOAI_API_KEY`                    | Exit `2`, readable message, no partial writes                                                         |
 | Unrecognized `.env` key      | Add `AZURE_NONSENSE=1` or `CREDO_NONSENSE=1` | Exit `2` naming the key, not a traceback                                                              |
 | One malformed control config | Temporarily rename a control's `base.yaml`   | That control's `scanned` count still increments, `errors` +1, the rest of the 20 still sync; exit `1` |
 | `SYNC_QUESTIONNAIRE=false`   | `python main.py --skip-questionnaire -v`     | No questionnaire line in the summary; the other three still run                                       |
@@ -130,7 +147,10 @@ In the Governance App:
 2. **Control library** — 20 `MSFT-*` controls present, published (not draft)
 3. Open one control (e.g. `MSFT-BLEU`) — confirm its evidence requirement shows the Azure evaluator
    code template
-4. **Custom fields** — the fields from `config/custom_fields.json` are present
+4. **Custom fields** — the fields from `config/custom_fields.json` are present, and each shows up on
+   Use Case records only, not on Models or Vendors (their `target` is `use_case`). On a fresh tenant
+   this is the first place the entity-type lookup is exercised, so confirm the run reports
+   `custom fields ... created=4 errors=0`
 5. **Questionnaires** — `DEFAULT_AZURE` (or the merged variant, if `CREDO_QUESTIONNAIRE_OPTIONS=2`)
    exists and has both the Azure template sections and (if merged) your existing sections
 

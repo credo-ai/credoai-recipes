@@ -1,12 +1,23 @@
-"""Client for Credo AI's v2 JSON:API — models, policy controls, custom fields, questionnaires.
+"""The parts of this cookbook that can't go through the official `pycredoai` SDK.
 
-One API for every domain this cookbook syncs, matching the original `MSFT+CredoAI` integration this
-was built from. Auth is `POST /auth/exchange` with `{api_token, tenant}`, and every resource lives
-under `/api/v2/{tenant}/...` with JSON:API bodies (`application/vnd.api+json`).
+Everything else goes through the SDK (see `sync.py`). Three things stay on Credo AI's private v2
+JSON:API instead:
 
-A 4xx here is not always an error: `422` on a create means "already exists" for every one of these
-resources, and callers branch on `response.status_code` directly rather than catching an exception —
-matching the API's own idiom (there is no separate "exists" check endpoint).
+1. **Creating the `Source` record.** `source` on a Model is a reference to a `Source` record, and
+   creating one has no public Integration API endpoint at all.
+2. **Looking up entity type ids.** A custom field is scoped to an entity type by id, the ids differ
+   per tenant, and neither the Integration API nor the SDK can list them.
+3. **Policy control versions.** The public SDK's `EvidenceRequirement` schema only has `type`,
+   `description`, and `required` — it has no fields for `code_template`, `mathematical_bound`, or
+   `governance_bounds`, which is exactly the rich content the MSFT-* controls' evidence
+   requirements actually carry (the runnable Azure evaluator skeleton scripts and their pass/fail
+   thresholds). Routing controls through the public SDK would silently strip all of that. This is
+   a gap in the public API/SDK, not a style choice.
+
+Same auth mechanism the SDK's own token exchange is built on (`/auth/exchange`), just a different
+host path (`/api/v2/{tenant}/...` instead of `/api/v1/integration/...`). On a real hosted tenant
+that's the same host as `CREDOAI_API_URL`; some local dev setups split the two across different
+services, so `settings.effective_private_api_url` falls back to `CREDOAI_PRIVATE_API_URL` when set.
 """
 
 from __future__ import annotations
@@ -20,27 +31,29 @@ import httpx
 
 from azure_foundry_sync.config import Settings
 
-logger = logging.getLogger("azure_foundry_sync.credo_v2")
+logger = logging.getLogger("azure_foundry_sync.credo_private")
 
 MAX_ATTEMPTS = 3
 TOKEN_REFRESH_THRESHOLD = timedelta(minutes=5)
 TOKEN_LIFETIME = timedelta(hours=1)
 
 
-class CredoApiError(Exception):
+class CredoPrivateApiError(Exception):
     def __init__(self, message: str, status_code: int | None = None, body: Any = None):
         super().__init__(message)
         self.status_code = status_code
         self.body = body
 
 
-class CredoClientV2:
+class CredoPrivateClient:
     def __init__(self, settings: Settings, http: httpx.Client | None = None):
-        if not settings.credo_api_token or not settings.credo_tenant:
-            raise CredoApiError("CREDO_API_TOKEN and CREDO_TENANT are required")
-        self.api_token = settings.credo_api_token
-        self.tenant = settings.credo_tenant
-        self.base_url = settings.credo_base_path.rstrip("/")
+        if not settings.credoai_api_key or not settings.credoai_tenant:
+            raise CredoPrivateApiError(
+                "CREDOAI_API_KEY and CREDOAI_TENANT are required"
+            )
+        self.api_key = settings.credoai_api_key
+        self.tenant = settings.credoai_tenant
+        self.base_url = settings.effective_private_api_url.rstrip("/")
         self._http = http or httpx.Client(timeout=30)
         self._token: str | None = None
         self._token_expiry: datetime | None = None
@@ -48,7 +61,7 @@ class CredoClientV2:
     def close(self) -> None:
         self._http.close()
 
-    def __enter__(self) -> "CredoClientV2":
+    def __enter__(self) -> "CredoPrivateClient":
         return self
 
     def __exit__(self, *exc_info) -> None:
@@ -64,17 +77,19 @@ class CredoClientV2:
     def _fetch_token(self) -> str:
         resp = self._http.post(
             f"{self.base_url}/auth/exchange",
-            json={"api_token": self.api_token, "tenant": self.tenant},
+            json={"api_token": self.api_key, "tenant": self.tenant},
         )
         if resp.status_code != 200:
-            raise CredoApiError(
+            raise CredoPrivateApiError(
                 f"/auth/exchange failed: {resp.status_code}",
-                status_code=resp.status_code,
-                body=resp.text,
+                resp.status_code,
+                resp.text,
             )
         token = resp.json().get("access_token")
         if not token:
-            raise CredoApiError("/auth/exchange response has no access_token field")
+            raise CredoPrivateApiError(
+                "/auth/exchange response has no access_token field"
+            )
         return token
 
     def _headers(self) -> dict[str, str]:
@@ -115,36 +130,19 @@ class CredoClientV2:
                 time.sleep(delay)
                 continue
             return resp
-        raise CredoApiError(f"{method} {path} failed after {MAX_ATTEMPTS} attempts")
-
-    # -- models --------------------------------------------------------------
-
-    def create_source(self, name: str) -> httpx.Response:
-        return self._request(
-            "POST",
-            "sources",
-            {"data": {"type": "sources", "attributes": {"name": name}}},
+        raise CredoPrivateApiError(
+            f"{method} {path} failed after {MAX_ATTEMPTS} attempts"
         )
-
-    def create_model(self, attrs: dict) -> httpx.Response:
-        return self._request("POST", "models", {"data": {"attributes": attrs}})
-
-    def list_models(self, page_limit: int = 100) -> list[dict]:
-        """Per Trevor Berreth (2026-09-29): models can't be filtered by name server-side yet —
-        page through everything and check by name client-side.
-
-        The server caps `page[limit]` at 100 regardless of what's requested, and paginates via
-        a `page[after]` cursor returned in `meta.after` — `meta.total_count` confirms when done.
-        """
-        return self._paginated("models", page_limit=page_limit)
 
     def _paginated(self, path: str, *, page_limit: int) -> list[dict]:
         items: list[dict] = []
         params: dict[str, Any] = {"page[limit]": page_limit}
         while True:
             resp = self._request("GET", path, params=params)
+            if resp.status_code == 404:
+                return items  # base doesn't exist yet — no versions, not an error
             if resp.status_code != 200:
-                raise CredoApiError(
+                raise CredoPrivateApiError(
                     f"GET {path} failed: {resp.status_code}",
                     resp.status_code,
                     resp.text,
@@ -155,6 +153,30 @@ class CredoClientV2:
             if not cursor:
                 return items
             params["page[after]"] = cursor
+
+    # -- source ----------------------------------------------------------------
+
+    def create_source(self, name: str) -> httpx.Response:
+        return self._request(
+            "POST",
+            "sources",
+            {"data": {"type": "sources", "attributes": {"name": name}}},
+        )
+
+    # -- entity types ------------------------------------------------------------
+
+    def entity_type_ids(self) -> dict[str, str]:
+        """Entity type name -> id (e.g. `use_case` -> the tenant's Use Case type id).
+
+        Custom fields are scoped by entity type *id*, and the ids are generated per tenant. Neither
+        the Integration API nor the SDK can list them, so they come from here.
+        """
+        ids: dict[str, str] = {}
+        for entity_type in self._paginated("entity_types", page_limit=100):
+            name = (entity_type.get("attributes") or {}).get("name")
+            if name and entity_type.get("id"):
+                ids[name] = entity_type["id"]
+        return ids
 
     # -- policy controls ---------------------------------------------------
 
@@ -177,32 +199,5 @@ class CredoClientV2:
             "POST", f"policy_control_bases/{control_key}/versions", payload
         )
 
-    def publish_control_version(self, version_id: str, payload: dict) -> httpx.Response:
+    def update_control_version(self, version_id: str, payload: dict) -> httpx.Response:
         return self._request("PATCH", f"policy_control_versions/{version_id}", payload)
-
-    # -- custom fields -------------------------------------------------------
-
-    def create_custom_field(self, field_data: dict) -> httpx.Response:
-        payload = {"data": {"type": "custom-field", "attributes": field_data}}
-        return self._request("POST", "custom_fields", payload)
-
-    # -- questionnaire ---------------------------------------------------------
-
-    def get_questionnaire(self, questionnaire_id: str, version: str) -> httpx.Response:
-        return self._request("GET", f"questionnaires/{questionnaire_id}+{version}")
-
-    def create_questionnaire_base(
-        self, questionnaire_id: str, name: str
-    ) -> httpx.Response:
-        payload = {
-            "data": {
-                "attributes": {"id": questionnaire_id, "name": name},
-                "type": "resource-type",
-            }
-        }
-        return self._request("POST", "questionnaire_bases", payload)
-
-    def create_questionnaire_version(
-        self, base_id: str, payload: dict
-    ) -> httpx.Response:
-        return self._request("POST", f"questionnaire_bases/{base_id}/versions", payload)

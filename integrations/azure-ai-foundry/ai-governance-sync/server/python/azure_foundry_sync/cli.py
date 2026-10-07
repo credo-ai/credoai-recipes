@@ -14,11 +14,13 @@ import argparse
 import logging
 import sys
 
+from credoai.auth import AuthenticationError
+from credoai.errors import ApiError
 from pydantic import ValidationError
 
 from azure_foundry_sync.azure_client import AzureApiError
 from azure_foundry_sync.config import get_settings
-from azure_foundry_sync.credo_v2 import CredoApiError
+from azure_foundry_sync.credo_private import CredoPrivateApiError
 from azure_foundry_sync.sync import run
 
 logger = logging.getLogger("azure_foundry_sync.cli")
@@ -81,7 +83,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         results = run(settings, dry_run=args.dry_run)
-    except (AzureApiError, CredoApiError) as exc:
+    except (AzureApiError, CredoPrivateApiError, ApiError, AuthenticationError) as exc:
         logger.error("Could not start: %s", exc)
         return 2
     except Exception:

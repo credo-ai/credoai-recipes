@@ -49,6 +49,9 @@ class AzureClient:
     def close(self) -> None:
         self._http.close()
 
+    def authenticate(self) -> None:
+        self._token = self.get_access_token()
+
     def get_access_token(self) -> str:
         resp = self._http.post(
             f"https://login.microsoftonline.com/{self.tenant_id}/oauth2/token",

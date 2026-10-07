@@ -1,8 +1,7 @@
 """Application configuration loaded from environment variables / `.env`.
 
 Single tenant, single Azure AD app registration — this cookbook is meant to be run by one
-customer against their own Credo AI tenant and their own Azure subscription, unlike the original
-internal integration this was built from, which juggled several tenants from one Lambda.
+customer against their own Credo AI tenant and their own Azure subscription.
 """
 
 from __future__ import annotations
@@ -21,10 +20,20 @@ _CONFIG_DIR = _COOKBOOK_ROOT / "config"
 
 
 class Settings(BaseSettings):
-    # Credo AI — same env var names as the original MSFT+CredoAI integration this was built from.
-    credo_api_token: str = ""
-    credo_tenant: str = ""
-    credo_base_path: str = "https://api.credo.ai"
+    # Same env var names the official `pycredoai` SDK reads itself — `CredoAI()` picks these up
+    # with no args needed. Also used by the private-API calls this cookbook still makes
+    # (the "Source" record, entity type ids for custom fields, and the policy controls — see
+    # credo_private.py).
+    credoai_api_key: str = ""
+    credoai_tenant: str = ""
+    credoai_api_url: str = "https://api.credo.ai"
+
+    # Where /auth/exchange + /api/v2/{tenant}/... (the private API credo_private.py talks to)
+    # actually live. On a real hosted tenant this is the same host
+    # as CREDOAI_API_URL (the default below), but some local dev setups split the public
+    # Integration API and the private API across two different services/ports — set this
+    # explicitly if yours does.
+    credoai_private_api_url: str = ""
 
     # Azure AD app registration (client-credentials flow)
     azure_tenant_id: str = ""
@@ -51,6 +60,10 @@ class Settings(BaseSettings):
         "env_file": _ENV_FILE,
         "env_file_encoding": "utf-8",
     }
+
+    @property
+    def effective_private_api_url(self) -> str:
+        return self.credoai_private_api_url or self.credoai_api_url
 
 
 @lru_cache

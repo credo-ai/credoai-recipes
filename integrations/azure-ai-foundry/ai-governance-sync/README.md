@@ -7,7 +7,8 @@ groundedness, jailbreak detection, content-safety, and more).
 
 - All code runs in your own environment, wherever it can reach Azure AD and Credo AI
 - Credentials stored as environment variables, never in source
-- Every write is idempotent — re-running with nothing changed makes zero API calls that matter
+- Every write is idempotent — re-running with nothing changed writes nothing (the one exception is a
+  harmless `Source` create attempt that Credo AI answers with `422 already exists`)
 
 ---
 
@@ -27,11 +28,23 @@ Azure AD app registration (client-credentials token)
        └─ azure_questionnaire.json                       -> Credo AI Questionnaire
 ```
 
-**One Credo AI API for everything.** All four domains go through the same `/auth/exchange` +
-`/api/v2/{tenant}/...` API — the same one the original `MSFT+CredoAI` integration this cookbook was
-built from already uses. `source` on each model references a `Source` record named "Azure AI
-Foundry" — this sync creates it automatically at the start of every run (idempotent, so re-running
-it every time is harmless), exactly like the original.
+**The official `pycredoai` SDK for most of it.** Models, custom fields, and the questionnaire all go
+through `pip install pycredoai` — the standard client for the Credo AI public Integration API. Three
+things stay on Credo AI's private v2 API instead:
+
+- **The `Source` record.** `source` on a Model is a reference to a `Source` record, and creating
+  one has no public Integration API endpoint. This sync creates it automatically at the start of
+  every run. Once it exists Credo AI answers `422`, which the sync treats as "already there".
+- **Entity type ids, for custom fields.** `config/custom_fields.json` scopes each field to an entity
+  type (e.g. `use_case`), so it only shows up on that kind of record. The SDK scopes by entity type
+  _id_, the ids differ on every tenant, and neither the SDK nor the Integration API can list them.
+  The sync reads them once from the private `entity_types` endpoint, and only when a field actually
+  needs creating.
+- **Policy controls.** The public SDK's evidence-requirement schema (`type`/`description`/`required`)
+  has no fields for `code_template`, `mathematical_bound`, or `governance_bounds` — exactly the rich
+  content the MSFT-\* controls' evidence requirements actually carry. Routing them through the
+  public API would silently drop all of that, so controls use the same private API the `Source`
+  call does.
 
 **The controls, not just the sync code, are the point.** Each `MSFT-*` control ships an
 `evidence_requirements` block containing a ready-to-run Python skeleton that calls the matching
@@ -44,7 +57,7 @@ governance reviewer gets a pre-populated Control Library instead of 20 controls 
 
 | Item                      | Where to get it                                                    |
 | ------------------------- | ------------------------------------------------------------------ |
-| Credo AI API token        | https://app.credo.ai/my-settings/tokens/                           |
+| Credo AI API key          | https://app.credo.ai/my-settings/tokens/                           |
 | Credo AI tenant name      | Your organization's tenant identifier (used to log in to Credo AI) |
 | Azure AD app registration | See Step 2 — tenant ID, client ID, client secret                   |
 | Python                    | 3.10+                                                              |
@@ -57,7 +70,7 @@ From the **cookbook root** — the directory holding this README:
 
 ```bash
 cp .env.example .env
-# Edit .env — CREDO_API_TOKEN, CREDO_TENANT, CREDO_BASE_PATH
+# Edit .env — CREDOAI_API_KEY, CREDOAI_TENANT, CREDOAI_API_URL
 ```
 
 `.env` belongs here, not in `server/python`. The sync looks for it at the cookbook root no matter
@@ -145,8 +158,9 @@ Sync complete: questionnaire  scanned=1  created=1  updated=0 skipped=0 errors=0
 ```
 
 Run it a second time with nothing changed and every counter reads `skipped` with **zero writes** —
-including controls, which now compare content against the latest published version rather than
-blindly posting (see "How it matches records" below).
+including controls and the questionnaire, which compare their content against the latest published
+version rather than blindly posting (see "How it matches records" below). The only write attempted is
+the `Source` create, which Credo AI rejects with `422` because it already exists.
 
 Exit codes: `0` all good, `1` the run completed but at least one domain hit an error, `2` it could
 not start.
@@ -169,51 +183,68 @@ A Kubernetes `CronJob` or a scheduled container run works equally well.
 
 ## Troubleshooting
 
-| Symptom                                                       | Likely Cause                                                                                                                    | Fix                                                                                                                           |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Non-JSON response acquiring Azure token                       | Wrong `AZURE_TENANT_ID`, or app not registered in that tenant                                                                   | Recheck Entra ID → Overview → Tenant ID, and the app registration                                                             |
-| `401` on Azure token request                                  | Expired or wrong `AZURE_CLIENT_SECRET`                                                                                          | Certificates & secrets → create a new one, update `.env`                                                                      |
-| `401` on `/auth/exchange`                                     | Wrong `CREDO_API_TOKEN` or `CREDO_TENANT`                                                                                       | Check `.env` values                                                                                                           |
-| `404` on `/auth/exchange`                                     | `CREDO_BASE_PATH` doesn't serve that host                                                                                       | Confirm the base path with Credo AI — a local/dev backend that only implements a subset of endpoints is the most common cause |
-| Every model create rejected (422, mentions `source`)          | Race on first-ever run — source creation and model creation happen in the same run                                              | Harmless; the source is created before models are posted, but re-run once if you see this on a brand-new tenant               |
-| Control shows `updated` every run even though nothing changed | Your local `config/` content genuinely differs from what's published (e.g. a version left in draft from an earlier partial run) | Not a bug — check `--dry-run -v` output, it names which controls differ and why (draft vs. published)                         |
-| Exit code `2` with a config error                             | Unrecognized or mistyped key in `.env`                                                                                          | Compare against `.env.example`                                                                                                |
+| Symptom                                                                         | Likely Cause                                                                                                                    | Fix                                                                                                                             |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Non-JSON response acquiring Azure token                                         | Wrong `AZURE_TENANT_ID`, or app not registered in that tenant                                                                   | Recheck Entra ID → Overview → Tenant ID, and the app registration                                                               |
+| `401` on Azure token request                                                    | Expired or wrong `AZURE_CLIENT_SECRET`                                                                                          | Certificates & secrets → create a new one, update `.env`                                                                        |
+| `401` on `/auth/exchange`                                                       | Wrong `CREDOAI_API_KEY` or `CREDOAI_TENANT`, or the key has expired/been rotated                                                | Check `.env` values; mint a fresh key if it's been a while                                                                      |
+| `404 Phoenix.Router.NoRouteError` on `POST /api/v1/integration/auth/token`      | `CREDOAI_API_URL` points at a backend that doesn't implement the public Integration API — common on a local/dev backend         | Models, custom fields, and the questionnaire need the public API; controls still work against such a backend (private API only) |
+| `404` on `/auth/exchange`                                                       | `CREDOAI_API_URL` doesn't serve that host at all                                                                                | Confirm the base URL with Credo AI                                                                                              |
+| Every model create rejected (422, mentions `source`)                            | Race on first-ever run — source creation and model creation happen in the same run                                              | Harmless; the source is created before models are posted, but re-run once if you see this on a brand-new tenant                 |
+| `POST .../sources` returns `422` on every run                                   | The `Source` record already exists                                                                                              | Expected — the sync treats it as "already there"                                                                                |
+| Custom field error: `targets entity type '...', which this tenant doesn't have` | `target` in `config/custom_fields.json` isn't an entity type on this tenant                                                     | Use one of the names listed in the error (e.g. `use_case`, `model`, `vendor`), or remove `target` to create the field unscoped  |
+| Control shows `updated` every run even though nothing changed                   | Your local `config/` content genuinely differs from what's published (e.g. a version left in draft from an earlier partial run) | Not a bug — check `--dry-run -v` output, it names which controls differ and why (draft vs. published)                           |
+| Questionnaire shows `updated` every run even though nothing changed             | Your local `config/azure_questionnaire.json` (or, with option `2`, your existing questionnaire) differs from what's published   | Check `--dry-run -v`; it says whether it would create or publish a new version                                                  |
+| Exit code `2` with a config error                                               | Unrecognized or mistyped key in `.env`                                                                                          | Compare against `.env.example`                                                                                                  |
 
-Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
+Still stuck? Support: support.credo.ai
 
 ---
 
 ## How it matches records
 
-**Models, by an upfront listing.** Per guidance from the Credo AI team (there's no server-side
-filter-by-name yet), this pages through the existing models registry once at the start of every
-run and builds a set of names. A model already in that set is skipped with **zero API calls** —
-no create attempted at all. Only genuinely new models get a `POST`.
+**Models and custom fields, by an upfront listing.** There's no server-side filter-by-name on
+either resource yet, so this pages through the existing registry once per run (`list_all()`) and
+builds a set of names. A record already in that set is skipped with **zero API calls** — no create
+attempted at all. Only genuinely new records get a `create()`.
 
-**Custom fields and the questionnaire, by 422.** No upfront list-and-diff for these two — a create
-is attempted for every record, and the API's own "already exists" response (`422`) is the skip
-signal, same as the original integration this cookbook was built from. (The API has no listing
-endpoint for these that would make an upfront check worthwhile.)
+**The questionnaire, by comparing content against the latest version.** The SDK can read the latest
+published version (`questionnaires.get_spec()`), so the sync does:
+
+1. Read the questionnaire's latest version. A `404` means it doesn't exist yet → create it.
+2. Compare its sections and questions against the desired ones. Order counts here, since section and
+   question order is part of what the questionnaire looks like. Fields the server adds (ids,
+   `hidden`/`required` defaults, nulls) are ignored, and a field left unset in
+   `azure_questionnaire.json` means "don't care", so the server's own default can't cause a mismatch.
+3. Identical → skip, no write. Different → publish a new version.
 
 **Controls, by comparing content against the latest version.** `policy_control_bases/{key}/versions`
-has no server-side dedup either, but the API exposes what's needed to do it client-side — per
-guidance from the Credo AI team:
+has no server-side dedup either, but the private API exposes what's needed to do it client-side:
 
-1. List the control's existing versions, take the highest.
+1. List the control's existing versions, take the highest. Only when there are none is the control's
+   base created, so an unchanged control costs one read and no writes.
 2. Compare its `info`, `risk_type_ids`, `evidence_requirements` against the desired content from
-   `config/` (lists sorted, `None`/`[]` treated as equal).
+   `config/` (lists order-normalized recursively; server-added fields outside what our local yaml
+   defines are ignored, so backend metadata can't cause a false mismatch). The reverse also holds:
+   a field our yaml defines that Credo AI accepts but never returns on read (today:
+   `evidence_requirements[].governance_bounds`) is left out of the comparison, because it could
+   never match and would otherwise post a new version on every run. The sync logs a warning naming
+   such fields.
 3. Identical → skip, no write at all.
-4. Latest version is a **draft** and differs → `PATCH` it in place, then `PATCH draft: false`.
-   Never `POST` while a draft exists — the API rejects a new version in that state.
+4. Latest version is a **draft** and differs → one `PATCH` sets the new content and `draft: false`
+   together. Never `POST` while a draft exists — the API rejects a new version in that state.
 5. Latest version is **published** and differs → `POST` (which copies the previous version's
-   content), then `PATCH` the actual desired content, then `PATCH draft: false`.
+   content as a new draft), then one `PATCH` sets the real content and `draft: false` together.
 
-Run `--dry-run -v` to see exactly which branch each control takes before running for real.
+Run `--dry-run -v` to see exactly which branch each control takes before running for real — a
+brand-new control (no base yet) is correctly reported as "would create," not an error.
 
 Changing a control's evidence requirements or description should still be done by adding a new
 `vN.yaml` next to the existing ones in `config/policy_controls/MSFT-*/` (several already have both
 `v1.yaml` and `v2.yaml`) — the sync always reads the latest local file and compares it against
 what's actually published, so this is what drives whether anything gets written on the next run.
+A change to `governance_bounds` alone is therefore not picked up on its own — change something else
+in the same `vN.yaml` (a new version file is the normal way) if you need it published.
 
 ---
 
@@ -221,19 +252,21 @@ what's actually published, so this is what drives whether anything gets written 
 
 - **Nothing is ever deleted.** A control, custom field, or questionnaire version removed from this
   cookbook's `config/` stays live in Credo AI.
-- **Model listing only checks the first page** (see `list_models` in `credo_v2.py`) — a tenant with
-  more models than that page size could see a duplicate create attempt on an old, unlisted model,
-  though the API's own `422` still catches it as a fallback.
-- **Custom fields and the questionnaire still rely on `422`, not a real listing check** — the API
-  has no listing endpoint for either that would make an upfront comparison worthwhile.
+- **Custom fields are only created, never changed.** A field that already exists (matched by name)
+  is left alone, including its entity type scoping — the API only lets a field's entity types be
+  added to, not removed. A field created earlier without scoping (e.g. by an older version of this
+  cookbook) keeps applying to every entity type until you change it in Credo AI.
+- **An unknown `target` is an error, not a fallback.** If a field's `target` isn't an entity type on
+  your tenant, that field is skipped and counted as an error, rather than being created for every
+  entity type.
+- **`governance_bounds` changes alone are not detected.** Credo AI accepts the field when a control
+  version is written but does not return it on read, so there is nothing to compare it against (see
+  "How it matches records").
 - **Single-tenant, single Azure AD app.** One `.env`, one Credo AI tenant, one Azure subscription per
   run — several tenants means several scheduled runs.
 - **The questionnaire merge (option `2`) is additive only** — it appends the Azure template's
   sections to your existing questionnaire's sections; it does not reconcile or deduplicate questions
-  that already cover the same ground.
-
----
-
-## Full guide
-
-Not yet published — pending Cookbook Validation Process sign-off.
+  that already cover the same ground. The result is written to its own questionnaire, keyed
+  `<CREDO_QUESTIONNAIRE_ID> with DEFAULT_AZURE`; your original is not modified. Only each question's
+  text, type, `multiple` flag and select options are carried over from your existing questionnaire —
+  other question settings (descriptions, `required`, `hidden`) are not.
