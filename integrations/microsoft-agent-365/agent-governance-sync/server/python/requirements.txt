@@ -1,0 +1,6 @@
+pycredoai==1.3.0
+httpx==0.28.1
+pydantic-settings==2.15.0
+
+# Not imported directly: pydantic-settings needs it to read `.env`.
+python-dotenv==1.2.3
