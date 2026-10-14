@@ -3,8 +3,8 @@ Hi,
 A new model was added to your organization's Credo AI model registry.
 
 Model:    {{ model.name }}
-Status:   {{ model.status }}
-{% if model.summary %}Summary:  {{ model.summary }}
+{% if model.status and model.status != "none" %}Status:   {{ model.status }}
+{% endif %}{% if model.summary %}Summary:  {{ model.summary }}
 {% endif %}
 Next steps: link the model to the use cases that rely on it, and complete any
 questionnaires attached to it.

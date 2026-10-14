@@ -15,6 +15,7 @@ import threading
 import time
 from dataclasses import dataclass
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid, parseaddr
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +75,10 @@ class Mailer:
         msg["From"] = self._settings.smtp_from
         msg["To"] = email.to
         msg["Subject"] = email.subject
+        # Some relays don't add these, and mail without them scores as spam.
+        msg["Date"] = formatdate(localtime=True)
+        from_domain = parseaddr(self._settings.smtp_from)[1].rpartition("@")[2]
+        msg["Message-ID"] = make_msgid(domain=from_domain or None)
         msg.set_content(email.text)
         msg.add_alternative(email.html, subtype="html")
 

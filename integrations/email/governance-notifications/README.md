@@ -80,14 +80,14 @@ be reached.
 
 ## Prerequisites
 
-| Item                       | Where to get it                                                         |
-| -------------------------- | ----------------------------------------------------------------------- |
-| Credo AI API key           | Governance App → Settings → Integrations (use a dedicated service user) |
-| Credo AI tenant name       | Your organization's tenant identifier                                   |
-| Access to webhook settings | Governance App → Settings → Webhooks (see Step 5)                       |
-| An SMTP server             | Your mail provider (SES, SendGrid, Microsoft 365, Mailtrap for testing) |
-| A public HTTPS URL         | A reverse proxy, load balancer or tunnel in front of the server         |
-| Python                     | 3.12+                                                                   |
+| Item                       | Where to get it                                                                              |
+| -------------------------- | -------------------------------------------------------------------------------------------- |
+| Credo AI API key           | Governance App → Settings → My settings → Tokens (sign in as a dedicated service user first) |
+| Credo AI tenant name       | Your organization's tenant identifier                                                        |
+| Access to webhook settings | Governance App → Settings → Webhooks (see Step 5)                                            |
+| An SMTP server             | Your mail provider (SES, SendGrid, Microsoft 365, Mailtrap for testing)                      |
+| A public HTTPS URL         | A reverse proxy, load balancer or tunnel in front of the server                              |
+| Python                     | 3.12+                                                                                        |
 
 ---
 
@@ -143,10 +143,11 @@ Keep it between restarts; deleting it means the next start is a "first start" ag
 
 1. In the Governance App, go to **Settings → Webhooks**. If you don't see it, ask your Credo AI
    contact to enable webhook settings for your tenant.
-2. Create a webhook with your URL from Step 2.
-3. Select the **`entity_created`** event. If you can filter by entity type, choose **Models**; the
-   server ignores other entity types either way.
-4. Save.
+2. Click **Add webhook**. Give it a name, and enter your URL from Step 2 as the **Endpoint URL**.
+   Leave **Authentication** as **None**.
+3. Under **Events**, search for and tick **`entity_created`** (in the Lifecycle group). It fires for
+   every entity type; the server ignores everything except models.
+4. Click **Add webhook**.
 
 ## Step 6: Try it
 
