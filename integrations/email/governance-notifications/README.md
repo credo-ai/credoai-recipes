@@ -164,11 +164,13 @@ server/python/
     credo.py           # the only module that uses the pycredoai SDK
     store.py           # SQLite outbox and "already emailed" record
     mailer.py          # templates and SMTP
-    templates/         # model_added.txt.j2 / model_added.html.j2
+    templates/         # model_added.txt.j2 / model_added.html.j2, credo-ai-logo.png
 fixtures/              # sample webhook deliveries
 ```
 
-To change the wording, edit the two templates. To add a scenario, add a handler to `handlers.py` and
+To change the wording, edit the two templates. The logo is embedded in each email rather than linked,
+because most mail clients block remote images; to use your own, replace `credo-ai-logo.png`
+(280 × 48 px, shown at half size). To add a scenario, add a handler to `handlers.py` and
 follow the rules at the top of that file.
 
 ---

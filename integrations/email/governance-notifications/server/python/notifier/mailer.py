@@ -27,6 +27,11 @@ log = logging.getLogger("notifier.mailer")
 
 _TEMPLATES = Path(__file__).parent / "templates"
 _MAX_SUBJECT = 150
+# The logo is embedded in each email (an inline CID attachment) rather than
+# linked, because Gmail and Outlook block remote images by default. HTML
+# templates show it with `<img src="cid:credo-ai-logo">`.
+_LOGO = _TEMPLATES / "credo-ai-logo.png"
+_LOGO_CID = "credo-ai-logo"
 
 _env = Environment(
     loader=FileSystemLoader(_TEMPLATES),
@@ -85,6 +90,11 @@ class Mailer:
         if self._settings.mail_dry_run:
             log.info("MAIL_DRY_RUN: not sending\n%s", msg.as_string())
             return
+
+        # Attached after the dry-run log so the log isn't a wall of base64.
+        msg.get_body(("html",)).add_related(
+            _LOGO.read_bytes(), maintype="image", subtype="png", cid=f"<{_LOGO_CID}>"
+        )
 
         self._throttle()
         try:
