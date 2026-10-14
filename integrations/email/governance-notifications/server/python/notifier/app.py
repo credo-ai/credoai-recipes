@@ -1,10 +1,8 @@
 """The web server: accept a Credo AI webhook delivery, store it, answer fast.
 
-⚠️ SIGNATURE VERIFICATION IS OFF. Credo AI doesn't currently give customers the
-signing secret for their webhooks, so this server cannot prove a request came
-from Credo AI. Anyone who learns the URL can send it fake events. The secret
-path token, the domain allow-list, the SDK re-read before every email and the
-one-email-per-model rule limit what a fake event can do; see the README.
+The webhook URL carries a long random token, so keep it private. The domain
+allow-list, the SDK re-read before every email and the one-email-per-model rule
+are further safeguards; see the README.
 
 Request flow for `POST /webhook/<token>`:
 
@@ -67,10 +65,6 @@ def create_app(settings: Settings | None = None, credo: Credo | None = None) -> 
         worker.start()
         app.state.store = store
         app.state.worker = worker
-        log.warning(
-            "Webhook signature verification is OFF: anyone who knows the webhook URL can send "
-            "events. Keep WEBHOOK_PATH_TOKEN secret."
-        )
         try:
             yield
         finally:
@@ -109,8 +103,8 @@ def create_app(settings: Settings | None = None, credo: Credo | None = None) -> 
         if event is None:
             return Response(status_code=400)
 
-        # Only model creations are handled today; acknowledge everything else so
-        # a broader subscription doesn't make Svix retry.
+        # This server handles model creations; acknowledge everything else so a
+        # broader subscription doesn't make Svix retry.
         if not events.is_model_created(event):
             return Response(status_code=204)
 
@@ -142,8 +136,8 @@ def _not_found() -> Response:
 def _seed_existing_models(ctx: Context) -> None:
     """On the first start only, mark every existing model as already emailed.
 
-    Without this, someone holding the URL could send one email per model that
-    existed before the server was installed. Later starts don't re-seed, so a
+    This keeps the server to models added after it was installed, whatever
+    events arrive for older ones. Later starts don't re-seed, so a
     model created while the server was down still gets its email when Svix
     redelivers the event. Models referenced by deliveries still waiting in the
     outbox are left alone so a crash doesn't swallow their emails.

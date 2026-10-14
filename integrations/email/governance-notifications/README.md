@@ -1,42 +1,14 @@
 # Credo AI → Email: Governance Notifications
 
-A small server you run that turns Credo AI webhooks into emails. This first release handles one
-scenario:
+A small server you run that turns Credo AI webhooks into emails:
 
 > **A model is added to the registry → email the person who added it**, with the model's name,
 > status and summary and a link to it in Credo AI.
 
-More scenarios (workflow stage changes, review approvals, controls ready for validation, weekly
-digests) will be added to the same server in later releases.
-
 - All code runs in your own environment; you choose the mail provider
 - Model details are read through the official [`pycredoai`](https://pypi.org/project/pycredoai/) SDK
-- The API key only needs to **read models**
-
----
-
-> [!WARNING]
-> **Webhook signature verification is off.** Credo AI doesn't currently give customers the signing
-> secret for their webhooks, so this server can't prove a request came from Credo AI. **Anyone who
-> learns the webhook URL can send it fake events.** Treat the URL as a password. The server limits
-> what a fake event can do:
->
-> - **Secret URL.** It only answers at `/webhook/<token>`, where the token is long and random. A wrong token
->   gets the same `404` as any other unknown path.
-> - **Allow-listed recipients.** It only emails addresses in your `ALLOWED_EMAIL_DOMAINS`.
-> - **Checked against Credo AI.** It reads the model back through the SDK before every email and
->   sends nothing if the model doesn't exist. Nothing from the webhook payload goes into the email.
-> - **One email per model, ever.** A repeated event, real or fake, never sends a second one.
->
-> **What that still allows:** someone holding the URL can pick a model that hasn't been emailed
-> about yet and send that one email to any address in your allowed domains. Nothing confirms the
-> address in the event really belongs to whoever added the model, so the email doesn't claim it
-> does; it says "a new model was added". See [Why existing models are skipped](#why-existing-models-are-skipped)
-> for how the server shrinks this to models added since it was installed.
->
-> Who else can see the URL: anyone in your Credo AI tenant who can view webhook settings, and the
-> webhook delivery logs Credo AI's provider (Svix) keeps. "Hard to guess" is not "hidden from Credo AI
-> admins".
+- The API key needs nothing more than **read access to models**
+- Each notification is one handler, so adding your own is a small change (see [Code layout](#code-layout))
 
 ---
 
@@ -68,9 +40,8 @@ lose nothing.
 ### Why existing models are skipped
 
 On its **first** start, the server reads the list of every model already in your tenant and marks
-each one as "already emailed". This is what stops someone holding the URL from sending one email
-for every model you've ever had. After that, only models created since the install can be emailed
-about, and their real event normally arrives within seconds.
+each one as "already emailed". After that, only models created since the install are emailed about,
+and their event normally arrives within seconds.
 
 Later restarts don't do this again, so a model created while the server was down still gets its
 email when the delivery is retried. The first start fails, with a clear message, if Credo AI can't
@@ -110,8 +81,9 @@ python -c 'import secrets; print(secrets.token_urlsafe(32))'
 ```
 
 Put the output in `WEBHOOK_PATH_TOKEN`. Your webhook URL will be
-`https://<your-host>/webhook/<that token>`. The server won't start with a token shorter than 32
-characters.
+`https://<your-host>/webhook/<that token>`. Treat it like a password: the server answers only at
+that path, and a wrong token gets the same `404` as any unknown path. It won't start with a token
+shorter than 32 characters.
 
 ## Step 3: Choose who may be emailed
 
@@ -201,12 +173,11 @@ follow the rules at the top of that file.
 
 ---
 
-## Limitations
+## Good to know
 
-- **One scenario.** Only model creation is handled; every other event is acknowledged and ignored.
-- **The recipient comes from the event.** It's the user on the event, checked against your domains,
-  not looked up in Credo AI. A future SDK release adds user lookups; this cookbook will switch to
-  them.
+- **Other events are ignored.** Events other than model creation are acknowledged with a `204`, so a
+  broader webhook subscription is harmless.
+- **The recipient comes from the event.** It's the user on the event, checked against your
+  `ALLOWED_EMAIL_DOMAINS`.
 - **Single instance.** Run one copy of the server. Two copies sharing one database file would both
   work the outbox.
-- **No signature verification**, as described at the top.

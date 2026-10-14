@@ -20,8 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 COOKBOOK_ROOT = Path(__file__).resolve().parents[3]
 
 # `secrets.token_urlsafe(32)` produces 43 characters; anything shorter than 32
-# is too easy to guess for a URL that is the only thing standing between the
-# internet and your users' inboxes.
+# is too easy to guess for a URL that should stay private.
 MIN_TOKEN_LENGTH = 32
 
 

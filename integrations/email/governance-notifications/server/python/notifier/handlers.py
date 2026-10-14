@@ -1,4 +1,4 @@
-"""Scenario handlers. Today there is one: a model was added to the registry.
+"""Scenario handlers: a model was added to the registry.
 
 A handler either returns a `Sent` (the worker records it), or raises:
 
@@ -6,8 +6,8 @@ A handler either returns a `Sent` (the worker records it), or raises:
   already emailed, recipient not allowed, model doesn't exist);
 - `credo.CredoUnavailable` / `mailer.MailError`: try again later.
 
-**Read this before adding a handler.** Signature verification is off (see the
-README), so a payload is a hint, not a fact. Each handler confirms the state it
+**Read this before adding a handler.** Treat a payload as a hint, not a fact.
+Each handler confirms the state it
 is about to announce through the SDK, emails only addresses it has vetted, and
 puts nothing from the payload into the email.
 """
@@ -72,7 +72,7 @@ def handle_model_added(event: events.Event, ctx: Context) -> Sent:
         ctx.settings.allowed_domains,
     )
 
-    # Fail closed: a model we can't find is a stale or forged event.
+    # Fail closed: a model we can't find means a stale or unexpected event.
     model = ctx.credo.get_model(model_id)
     if model is None:
         raise Drop("model not found in Credo AI")

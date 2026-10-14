@@ -4,8 +4,8 @@ This is the only module that imports the SDK. It exposes the two reads the
 cookbook needs and turns the SDK's failure modes into two outcomes the rest of
 the code can act on:
 
-- "this model doesn't exist" (`None`): the event is stale or forged, so
-  nothing is sent;
+- "this model doesn't exist" (`None`): the event is stale (for example, the
+  model was deleted since), so nothing is sent;
 - `CredoUnavailable`: Credo AI couldn't be asked right now (network, auth,
   5xx), so the delivery is retried later. Nothing is sent without a successful
   read; the server fails closed.

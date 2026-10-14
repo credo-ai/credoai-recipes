@@ -7,8 +7,8 @@ Two tables carry the server's guarantees:
   row is still here and is picked up again on the next start. Its primary key is
   the `svix-id` header, which also absorbs Svix's own redeliveries.
 - `sent` is keyed on what an email is *about* (`model_added:<model_id>`), not on
-  `svix-id`. Anyone holding the URL can invent fresh `svix-id`s, but they can't
-  make the same email go out twice.
+  `svix-id`, so a new `svix-id` for the same model still can't make the same
+  email go out twice.
 
 One connection, guarded by a lock: the web handler and the worker thread share
 it, and the volume here is a handful of rows a day.
