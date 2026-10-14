@@ -8,12 +8,13 @@ Each recipe is self-contained — clone, configure, and run.
 
 ## Available integrations
 
-| Target System                                  | Integration Pattern       | Delivery Type                                          | Status                                       |
-| ---------------------------------------------- | ------------------------- | ------------------------------------------------------ | -------------------------------------------- |
-| [JIRA](./jira/use-case-creation)               | Use Case Intake           | Cookbook (run your own server)                         | ✅ Available                                 |
-| [ServiceNow](./servicenow/use-case-creation)   | Use Case Intake           | Native Integration (runs inside ServiceNow, no server) | ✅ Available                                 |
-| [Splunk](./splunk/shadow-ai-event-ingestion)   | Shadow AI Event Ingestion | Cookbook (run your own poller, no inbound webhook)     | 🧪 Preview — talks to a backend API directly |
-| [AWS Bedrock](./aws-bedrock/ai-inventory-sync) | AI Inventory Sync         | Cookbook (run your own scheduled job, no server)       | ✅ Available                                 |
+| Target System                                                      | Integration Pattern       | Delivery Type                                          | Status                                                        |
+| ------------------------------------------------------------------ | ------------------------- | ------------------------------------------------------ | ------------------------------------------------------------- |
+| [JIRA](./jira/use-case-creation)                                   | Use Case Intake           | Cookbook (run your own server)                         | ✅ Available                                                  |
+| [ServiceNow](./servicenow/use-case-creation)                       | Use Case Intake           | Native Integration (runs inside ServiceNow, no server) | ✅ Available                                                  |
+| [Splunk](./splunk/shadow-ai-event-ingestion)                       | Shadow AI Event Ingestion | Cookbook (run your own poller, no inbound webhook)     | 🧪 Preview — talks to a backend API directly                  |
+| [AWS Bedrock](./aws-bedrock/ai-inventory-sync)                     | AI Inventory Sync         | Cookbook (run your own scheduled job, no server)       | ✅ Available                                                  |
+| [Microsoft Agent 365](./microsoft-agent-365/agent-governance-sync) | Agent Governance Sync     | Cookbook (run your own scheduled job, no server)       | 🧪 Preview — block and unblock use Microsoft's beta Graph API |
 
 More systems and patterns are on the [request board](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md) — see [Request an integration](#request-an-integration) below.
 
