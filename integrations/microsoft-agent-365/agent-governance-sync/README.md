@@ -3,7 +3,7 @@ hub:
   name: "Microsoft Agent 365 Governance Sync"
   logo: "logo.svg" # PLACEHOLDER glyph, not a Microsoft mark. Replace with the approved Microsoft Agent 365 brand asset before publishing.
   category: "Agent gateways & AI security" # PROVISIONAL — the Type taxonomy is not finalized (see the cookbook-hub-metadata schema notes).
-  support_level: "example"
+  support_level: "credo-ai-maintained"
   functions:
     - "Registry Sync"
     - "Deployment Gating"

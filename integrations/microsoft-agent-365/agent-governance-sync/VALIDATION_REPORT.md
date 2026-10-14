@@ -133,10 +133,12 @@ app-only auth.
 
 ## 8. Decisions flagged for review
 
-These are judgment calls a maintainer or the hub owner should confirm:
+These are judgment calls a maintainer or the hub owner should confirm. The first is settled; the rest are open:
 
-1. **`support_level: example`** — chosen over `credo-ai-maintained` because block and unblock sit on
-   Microsoft's beta channel. Change it if Credo AI will maintain this.
+1. **`support_level: credo-ai-maintained`** — the owner's decision. It is a commitment: block and
+   unblock sit on Microsoft's `/beta` Graph channel, so maintaining this means tracking changes to
+   those two endpoints. The README's Preview banner stays, so customers still see the beta
+   dependency next to the support level.
 2. **`category: "Agent gateways & AI security"`** and **`functions: Registry Sync, Deployment
 Gating`** — the function values come from the nine-value list confirmed on DEV-8042; the category
    taxonomy is still provisional.
