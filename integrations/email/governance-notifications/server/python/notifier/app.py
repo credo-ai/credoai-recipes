@@ -80,9 +80,13 @@ def create_app(settings: Settings | None = None, credo: Credo | None = None) -> 
         openapi_url=None,
     )
 
+    # Also reports the worker, so a server that accepts deliveries but can't
+    # send them shows as unhealthy.
     @app.get("/healthz")
-    async def healthz() -> dict[str, str]:
-        return {"status": "ok"}
+    async def healthz(request: Request) -> JSONResponse:
+        if not request.app.state.worker.healthy:
+            return JSONResponse({"status": "worker unhealthy"}, status_code=503)
+        return JSONResponse({"status": "ok"})
 
     @app.post("/webhook/{path_token}")
     async def webhook(path_token: str, request: Request) -> Response:

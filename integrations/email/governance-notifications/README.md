@@ -33,9 +33,9 @@ start, so an email is never lost after Credo AI has been told it was received. T
 in the moment between sending an email and recording it means that one email is sent again on restart.
 
 **Retries.** If Credo AI or your mail server is unavailable, the delivery is retried with growing
-delays (30 s, 1 min, 2 min, ...; 6 attempts by default) and then logged as failed. While your server
-is down, Credo AI's webhook provider keeps retrying deliveries on its own schedule, so short outages
-lose nothing.
+delays (30 s, 1 min, 2 min, 4 min, 8 min, then every 15 min; 9 attempts by default), which covers an
+outage of about an hour, and then logged as failed. While your own server is down, Credo AI's
+webhook provider keeps retrying deliveries on its own schedule.
 
 ### Why existing models are skipped
 
@@ -109,7 +109,8 @@ token; **do the same, or redact the path, in your reverse proxy or load balancer
 State lives in `notifier.sqlite3` in the cookbook root (outbox and the "already emailed" record).
 Keep it between restarts; deleting it means the next start is a "first start" again.
 
-`GET /healthz` returns `{"status": "ok"}` for your load balancer.
+`GET /healthz` returns `{"status": "ok"}` for your load balancer, or a `503` when the background
+worker that sends the emails has stopped working (for example, the database file can't be written).
 
 ## Step 5: Subscribe in Credo AI
 

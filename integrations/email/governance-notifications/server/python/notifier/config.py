@@ -65,8 +65,9 @@ class Settings(BaseSettings):
     # "already emailed". See README "Why existing models are skipped".
     seed_existing_models: bool = True
     # How many times a delivery is retried (Credo AI or SMTP unavailable)
-    # before it is given up on and logged as failed.
-    max_attempts: int = 6
+    # before it is given up on and logged as failed. With the worker's backoff,
+    # 9 attempts cover about an hour of outage.
+    max_attempts: int = 9
     log_level: str = "INFO"
 
     @field_validator("webhook_path_token")

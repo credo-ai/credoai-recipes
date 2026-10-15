@@ -18,9 +18,10 @@ from .store import DROPPED, FAILED, Delivery
 
 log = logging.getLogger("notifier.worker")
 
-# Wait between retries: 30s, 1m, 2m, 4m, ... capped at 30m.
+# Wait between retries: 30s, 1m, 2m, 4m, 8m, then every 15m. The cap keeps the
+# first email after an outage from waiting long once things are back.
 _BASE_DELAY = 30.0
-_MAX_DELAY = 30 * 60.0
+_MAX_DELAY = 15 * 60.0
 _IDLE_POLL = 60.0
 
 
@@ -29,6 +30,7 @@ class Worker:
         self._ctx = ctx
         self._wake = threading.Event()
         self._stop = threading.Event()
+        self._failing = False
         self._thread = threading.Thread(
             target=self._run, name="notifier-worker", daemon=True
         )
@@ -44,18 +46,35 @@ class Worker:
     def notify(self) -> None:
         self._wake.set()
 
+    @property
+    def healthy(self) -> bool:
+        """The thread is running and its last pass over the outbox succeeded."""
+        return self._thread.is_alive() and not self._failing
+
     def _run(self) -> None:
         store = self._ctx.store
         while not self._stop.is_set():
-            delivery = store.next_due()
-            if delivery is None:
-                wait = store.seconds_until_next()
-                self._wake.wait(
-                    timeout=_IDLE_POLL if wait is None else min(wait, _IDLE_POLL)
+            # The database can fail too (locked, disk full). Log it and try
+            # again after a pause: if this thread ended, deliveries would pile
+            # up unsent while the web server kept answering 202.
+            try:
+                delivery = store.next_due()
+                if delivery is None:
+                    wait = store.seconds_until_next()
+                    self._failing = False
+                    self._wake.wait(
+                        timeout=_IDLE_POLL if wait is None else min(wait, _IDLE_POLL)
+                    )
+                    self._wake.clear()
+                    continue
+                self._process(delivery)
+                self._failing = False
+            except Exception:
+                self._failing = True
+                log.exception(
+                    "worker: unexpected error, trying again in %.0fs", _BASE_DELAY
                 )
-                self._wake.clear()
-                continue
-            self._process(delivery)
+                self._stop.wait(_BASE_DELAY)
 
     def _process(self, delivery: Delivery) -> None:
         store = self._ctx.store
