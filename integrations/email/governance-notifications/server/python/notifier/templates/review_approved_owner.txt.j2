@@ -1,0 +1,8 @@
+Hi{% if person.given_name %} {{ person.given_name }}{% endif %},
+
+{% if automated %}The review of your use case "{{ entity.name }}" was approved automatically,
+by your organization's auto-approval rule.{% else %}The review of your use case "{{ entity.name }}" was approved.{% endif %}
+
+View the use case: {{ link }}
+
+{% include "_footer.txt.j2" %}

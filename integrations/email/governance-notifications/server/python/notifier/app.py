@@ -1,15 +1,16 @@
-"""The web server: accept a Credo AI webhook delivery, store it, answer fast.
-
-The webhook URL carries a long random token, so keep it private. The domain
-allow-list, the SDK re-read before every email and the one-email-per-model rule
-are further safeguards; see the README.
+"""The web server: accept a Credo AI webhook delivery, check it, store it, answer fast.
 
 Request flow for `POST /webhook/<token>`:
 
 1. Wrong token → 404, the same answer as for any other unknown path.
-2. Not an event this server handles → 204, nothing stored.
-3. Store the delivery in the outbox (deduplicated on `svix-id`) → 202.
-4. The worker thread does the rest, after the response.
+2. Bad, missing or stale (over 5 minutes) Svix signature → 401, nothing stored.
+3. Not an event this server handles → 204, nothing stored.
+4. Store the delivery in the outbox (deduplicated on `svix-id`) → 202.
+5. The worker thread does the rest, after the response.
+
+The signature is the real check. The long random token in the URL, the SDK
+re-read before every email and the per-email idempotency keys are further
+safeguards; see the README.
 """
 
 from __future__ import annotations
@@ -22,54 +23,57 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from svix.webhooks import Webhook, WebhookVerificationError
 
-from . import events
+from . import events, router
 from .config import Settings, get_settings
-from .credo import Credo, CredoUnavailable
-from .handlers import Context, model_added_key
+from .credo import Credo
+from .handlers import Context
 from .mailer import Mailer
+from .reminders.scheduler import Scheduler
+from .stages import StageMessages
 from .store import Store
 from .worker import Worker
 
 log = logging.getLogger("notifier.app")
 
 MAX_BODY_BYTES = 256 * 1024
-_SEEDED = "seeded_existing_models"
+
+
+def build_context(settings: Settings, credo: Credo | None = None) -> Context:
+    return Context(
+        settings=settings,
+        store=Store(settings.database_path),
+        credo=credo or Credo(settings),
+        mailer=Mailer(settings),
+        stages=StageMessages(settings.stage_messages_path),
+    )
 
 
 def create_app(settings: Settings | None = None, credo: Credo | None = None) -> FastAPI:
     settings = settings or get_settings()
     token = settings.webhook_path_token
+    verifier = Webhook(settings.webhook_signing_secret)
     _redact_token_in_access_logs(token)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        store = Store(settings.database_path)
-        ctx = Context(
-            settings=settings,
-            store=store,
-            credo=credo or Credo(settings),
-            mailer=Mailer(settings),
-        )
-        if settings.seed_existing_models:
-            try:
-                _seed_existing_models(ctx)
-            except CredoUnavailable:
-                log.error(
-                    "First start needs the list of existing models from Credo AI and couldn't get it. "
-                    "Check CREDO_API_KEY, CREDO_TENANT and CREDO_API_BASE_URL. Not starting."
-                )
-                store.close()
-                raise
+        ctx = build_context(settings, credo)
         worker = Worker(ctx)
         worker.start()
-        app.state.store = store
+        scheduler = None
+        if settings.reminders_in_process:
+            scheduler = Scheduler(settings, ctx.store, worker.notify)
+            scheduler.start()
+        app.state.store = ctx.store
         app.state.worker = worker
         try:
             yield
         finally:
+            if scheduler is not None:
+                scheduler.stop()
             worker.stop()
-            store.close()
+            ctx.store.close()
 
     # No /docs, /redoc or /openapi.json: they would advertise the webhook route.
     app = FastAPI(
@@ -99,6 +103,15 @@ def create_app(settings: Settings | None = None, credo: Credo | None = None) -> 
         body = await request.body()
         if len(body) > MAX_BODY_BYTES:
             return Response(status_code=413)
+        # Checked on the raw bytes, before anything is parsed or stored.
+        try:
+            verifier.verify(body, dict(request.headers))
+        except WebhookVerificationError:
+            log.warning(
+                "rejected a delivery with a bad or missing signature; if every "
+                "delivery is rejected, WEBHOOK_SIGNING_SECRET is wrong or was rotated"
+            )
+            return Response(status_code=401)
         try:
             payload = json.loads(body)
         except ValueError:
@@ -107,9 +120,9 @@ def create_app(settings: Settings | None = None, credo: Credo | None = None) -> 
         if event is None:
             return Response(status_code=400)
 
-        # This server handles model creations; acknowledge everything else so a
-        # broader subscription doesn't make Svix retry.
-        if not events.is_model_created(event):
+        # Acknowledge anything this server doesn't handle, so a broader
+        # subscription doesn't make Svix retry.
+        if not router.accepts(event.subject):
             return Response(status_code=204)
 
         svix_id = request.headers.get("svix-id")
@@ -135,28 +148,6 @@ def create_app(settings: Settings | None = None, credo: Credo | None = None) -> 
 def _not_found() -> Response:
     # Byte for byte what FastAPI answers for a path that doesn't exist.
     return JSONResponse({"detail": "Not Found"}, status_code=404)
-
-
-def _seed_existing_models(ctx: Context) -> None:
-    """On the first start only, mark every existing model as already emailed.
-
-    This keeps the server to models added after it was installed, whatever
-    events arrive for older ones. Later starts don't re-seed, so a
-    model created while the server was down still gets its email when Svix
-    redelivers the event. Models referenced by deliveries still waiting in the
-    outbox are left alone so a crash doesn't swallow their emails.
-    """
-    if ctx.store.get_meta(_SEEDED):
-        return
-    waiting = {
-        (p.get("data") or {}).get("modelId")
-        for p in ctx.store.pending_payloads()
-        if isinstance(p, dict)
-    }
-    keys = [model_added_key(mid) for mid in ctx.credo.model_ids() if mid not in waiting]
-    count = ctx.store.seed(keys)
-    ctx.store.set_meta(_SEEDED, "1")
-    log.info("first start: marked %d existing models as already emailed", count)
 
 
 class _RedactToken(logging.Filter):

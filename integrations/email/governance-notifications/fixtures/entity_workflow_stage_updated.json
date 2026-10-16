@@ -1,0 +1,23 @@
+{
+  "data": {
+    "entityId": "Entity2000000000000000",
+    "entityType": "use_case",
+    "eventType": "entity_workflow_stage_updated",
+    "previousWorkflowStageId": "PreviousWorkflowStage1",
+    "useCaseId": "UseCase100000000000000",
+    "user": {
+      "email": "jane.doe@example.com",
+      "familyName": null,
+      "givenName": null,
+      "job": null,
+      "nickname": null,
+      "role": "admin",
+      "userId": "User100000000000000000"
+    },
+    "workflowStageId": "WorkflowStage100000000"
+  },
+  "source": "CredoAI",
+  "subject": "entity_workflow_stage_updated",
+  "time": "2026-10-16T00:27:36.574374Z",
+  "type": "entity_workflow_stage_updated"
+}

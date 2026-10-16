@@ -1,0 +1,8 @@
+Hi{% if person.given_name %} {{ person.given_name }}{% endif %},
+
+Evidence for {% if control_key %}the control {{ control_key }}{% else %}a control{% endif %} on your use case "{{ entity.name }}"
+is ready for validation.
+
+Review the evidence: {{ link }}
+
+{% include "_footer.txt.j2" %}

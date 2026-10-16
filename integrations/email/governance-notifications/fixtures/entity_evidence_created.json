@@ -1,0 +1,25 @@
+{
+  "data": {
+    "entityId": "Entity2000000000000000",
+    "entityType": "use_case",
+    "eventType": "entity_evidence_created",
+    "evidenceId": "Evidence10000000000000",
+    "evidenceType": "select",
+    "questionId": "Question10000000000000",
+    "replacedEvidenceId": "ReplacedEvidence100000",
+    "useCaseId": "UseCase100000000000000",
+    "user": {
+      "email": "jane.doe@example.com",
+      "familyName": null,
+      "givenName": null,
+      "job": null,
+      "nickname": null,
+      "role": "admin",
+      "userId": "User100000000000000000"
+    }
+  },
+  "source": "CredoAI",
+  "subject": "entity_evidence_created",
+  "time": "2026-10-16T00:29:29.709620Z",
+  "type": "entity_evidence_created"
+}
