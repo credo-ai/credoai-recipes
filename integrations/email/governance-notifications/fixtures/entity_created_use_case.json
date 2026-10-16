@@ -1,0 +1,21 @@
+{
+  "type": "entity_created",
+  "time": "2026-10-13T22:00:00.000000Z",
+  "subject": "entity_created",
+  "source": "CredoAI",
+  "data": {
+    "entityId": "00000000-0000-0000-0000-000000000003",
+    "entityType": "use_case",
+    "useCaseId": "00000000-0000-0000-0000-000000000004",
+    "eventType": "entity_created",
+    "user": {
+      "userId": "00000000-0000-0000-0000-000000000002",
+      "email": "jane.doe@example.com",
+      "role": "admin",
+      "job": null,
+      "familyName": "Doe",
+      "givenName": "Jane",
+      "nickname": "jane"
+    }
+  }
+}

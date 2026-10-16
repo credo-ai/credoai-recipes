@@ -1,0 +1,6 @@
+key: MSFT-TEST
+kind: PolicyControl
+metadata:
+  deprecated: false
+  deprecated_reason: ''
+spec: '1.0'

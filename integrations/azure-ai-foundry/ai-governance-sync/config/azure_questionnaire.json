@@ -1,0 +1,180 @@
+{
+    "data": {
+        "type": "questionnaire_versions",
+        "attributes": {
+            "version": "1.0.0",
+            "draft": false,
+            "sections": [
+                {
+                    "title": "Integration Metadata",
+                    "description": "Information related to the Azure project associated with this use case.",
+                    "questions": [
+                        {
+                            "question": "What is the Azure Subscription ID of the project?",
+                            "evidence_type": "text"
+                        },
+                        {
+                            "question": "What is the Azure Resource Group of the project?",
+                            "evidence_type": "text"
+                        },
+                        {
+                            "question": "What is the Azure Project ID of the project?",
+                            "evidence_type": "text"
+                        },
+                        {
+                            "question": "What is the Azure Project's Connection String?",
+                            "evidence_type": "text"
+                        }
+                    ]
+                },
+                {
+                    "title": "Content Safety",
+                    "description": "Questions aimed at assessing the content safety of the use case.",
+                    "questions": [
+                        {
+                            "question": "Has the system been tested to ensure it does not generate content that is discriminatory or biased?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        },
+                        {
+                            "question": "Has the system been tested to ensure it does not generate content that is sexually explicit?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        },
+                        {
+                            "question": "Has the system been assessed for the potential to generate content that promotes violence?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        },
+                        {
+                            "question": "Has the system been tested for its potential to generate harmful content regarding mental health or self-injury?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Enterprise Considerations",
+                    "description": "Questions aimed at assessing how well the use case aligns with enterprise non-negotiables.",
+                    "questions": [
+                        {
+                            "question": "Was all training data used to develop the system (verifiably) in the public domain or used under express approval of the data owner?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        },
+                        {
+                            "question": "Have penetration tests been conducted to assess the system's vulnerability to prompt-based (direct) jailbreak attacks?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        },
+                        {
+                            "question": "Has the system been assessed for potential vulnerabilities that could be exploited through non-prompt (indirect) means, such as content from the open internet or other retrieved data?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Performance -- Information Quality",
+                    "description": "Questions aimed at assessing the information quality of the content generated by the use case.",
+                    "questions": [
+                        {
+                            "question": "Is there a process for auditing the content generated from external data to ensure factual accuracy?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        },
+                        {
+                            "question": "Has the system been tested for its ability to select the most appropriate external data sources for content generation?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        },
+                        {
+                            "question": "Has the system been evaluated to ensure its responses are consistently relevant to the user's specific query?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Performance -- Response Quality",
+                    "description": "Questions aimed at assessing the response quality of the use case.",
+                    "questions": [
+                        {
+                            "question": "Has the system been tested to ensure that the generated responses are consistent and coherent throughout?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        },
+                        {
+                            "question": "Has the system undergone testing for fluency in the generated content, including linguistic and stylistic accuracy?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Performance -- Generic",
+                    "description": "Questions aimed at assessing the performance of the use case.",
+                    "questions": [
+                        {
+                            "question": "Has the system undergone testing to validate its outputs are of sufficient quality for the target task?",
+                            "evidence_type": "select",
+                            "multiple": false,
+                            "select_options": [
+                                "Yes",
+                                "No"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}
