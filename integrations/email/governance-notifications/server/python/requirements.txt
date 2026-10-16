@@ -1,6 +1,6 @@
-# Credo AI SDK. 1.3.0 has models.get / models.list_all, which is all this
-# cookbook reads. The synchronous client is used (on a worker thread): the
-# async client in this release has a known authentication bug.
+# Credo AI SDK. The scenarios beyond #5 use users, entities, tasks, entity
+# reviews and webhooks, which ship in the SDK release after 1.3.0; until it is
+# published, see README "Preview: the SDK release this needs".
 pycredoai==1.3.0
 
 fastapi==0.143.0
@@ -10,3 +10,12 @@ jinja2==3.1.6
 
 # Used directly by credo.py (to catch transport errors) and replay.py.
 httpx==0.28.1
+
+# Checks the signature on every delivery (and signs replay.py posts).
+svix==2.8.0
+
+# Runs the reminders (#6, #8) on their cron schedules.
+apscheduler==3.11.3
+
+# Reads stage_messages.yaml.
+pyyaml==6.0.3

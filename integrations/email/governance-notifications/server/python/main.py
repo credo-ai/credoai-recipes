@@ -2,10 +2,9 @@
 
     python main.py
 
-Settings come from the cookbook's `.env` (see `.env.example`). The server
-refuses to start when a required setting is missing or unsafe, and on its very
-first start when Credo AI can't be reached (it needs the list of existing
-models; see README "Why existing models are skipped").
+Settings come from the cookbook's `.env` (see `.env.example`; `setup_webhook.py`
+writes the webhook settings). The server refuses to start when a required
+setting is missing or unsafe, or when `stage_messages.yaml` doesn't parse.
 """
 
 from __future__ import annotations
@@ -16,7 +15,9 @@ import sys
 import uvicorn
 from notifier.app import create_app
 from notifier.config import get_settings
+from notifier.stages import StageMessages
 from pydantic import ValidationError
+from yaml import YAMLError
 
 
 def main() -> int:
@@ -25,11 +26,18 @@ def main() -> int:
     except ValidationError as exc:
         print(f"Configuration error in .env:\n{exc}", file=sys.stderr)
         return 2
+    try:
+        StageMessages(settings.stage_messages_path)
+    except (OSError, ValueError, YAMLError) as exc:
+        print(f"Can't use {settings.stage_messages_path}:\n{exc}", file=sys.stderr)
+        return 2
 
     logging.basicConfig(
         level=settings.log_level.upper(),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # The SDK's HTTP client logs every request at INFO; keep the log about emails.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     # access_log=False: an access log line contains the full request path, and
     # the path contains the webhook token.
     uvicorn.run(

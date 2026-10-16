@@ -1,0 +1,8 @@
+Hi{% if person.given_name %} {{ person.given_name }}{% endif %},
+
+An answer on one of the questionnaires of "{{ entity.name }}" was changed.
+{% if role == "reviewer" %}You're a reviewer on its open review.{% else %}You're receiving this as a Credo AI admin.{% endif %}
+
+View the questionnaires: {{ link }}
+
+{% include "_footer.txt.j2" %}

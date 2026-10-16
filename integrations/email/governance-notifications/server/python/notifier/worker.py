@@ -10,11 +10,11 @@ from __future__ import annotations
 import logging
 import threading
 
-from . import events
+from . import events, router
 from .credo import CredoUnavailable
-from .handlers import HANDLERS, Context, Drop
+from .handlers import Context, Drop
 from .mailer import MailError
-from .store import DROPPED, FAILED, Delivery
+from .store import DONE, DROPPED, FAILED, Delivery
 
 log = logging.getLogger("notifier.worker")
 
@@ -79,13 +79,13 @@ class Worker:
     def _process(self, delivery: Delivery) -> None:
         store = self._ctx.store
         event = events.parse(delivery.payload)
-        handler = HANDLERS.get(delivery.subject)
+        handler = router.handler_for(delivery.subject)
         if event is None or handler is None:
             store.finish(delivery.svix_id, DROPPED, "no handler for this event")
             return
 
         try:
-            sent = handler(event, self._ctx)
+            outcome = handler(event, self._ctx)
         except Drop as exc:
             log.info("delivery %s: nothing sent (%s)", delivery.svix_id, exc)
             store.finish(delivery.svix_id, DROPPED, str(exc))
@@ -95,15 +95,11 @@ class Worker:
             log.exception("delivery %s: unexpected error", delivery.svix_id)
             self._retry(delivery, f"unexpected {type(exc).__name__}: {exc}")
         else:
-            reason = "dry_run" if self._ctx.settings.mail_dry_run else "sent"
-            store.complete(delivery.svix_id, sent.key, sent.recipient, reason)
-            log.info(
-                "delivery %s: %s %s to %s",
-                delivery.svix_id,
-                reason,
-                sent.key,
-                sent.recipient,
-            )
+            note = str(outcome)
+            if self._ctx.settings.mail_dry_run:
+                note += " (MAIL_DRY_RUN)"
+            store.finish(delivery.svix_id, DONE, note)
+            log.info("delivery %s (%s): %s", delivery.svix_id, delivery.subject, note)
 
     def _retry(self, delivery: Delivery, note: str) -> None:
         attempts = delivery.attempts + 1

@@ -1,8 +1,8 @@
 """Settings, loaded from the cookbook's `.env`.
 
 Everything is validated at startup. A server that would accept deliveries on a
-guessable URL, or email addresses outside your organization, refuses to boot
-rather than logging a warning and carrying on.
+guessable URL, or without checking their signatures, refuses to boot rather
+than logging a warning and carrying on.
 """
 
 from __future__ import annotations
@@ -10,40 +10,57 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from apscheduler.triggers.cron import CronTrigger
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from svix.webhooks import Webhook
 
 # Anchor `.env` and the database to the cookbook root (the directory holding
 # README.md), three levels up from this file, so the server behaves the same
 # whatever directory it is started from.
 COOKBOOK_ROOT = Path(__file__).resolve().parents[3]
+SERVER_DIR = Path(__file__).resolve().parents[1]
+ENV_FILE = COOKBOOK_ROOT / ".env"
 
 # `secrets.token_urlsafe(32)` produces 43 characters; anything shorter than 32
 # is too easy to guess for a URL that should stay private.
 MIN_TOKEN_LENGTH = 32
 
 
-class Settings(BaseSettings):
+class CredoSettings(BaseSettings):
+    """What it takes to talk to Credo AI. `setup_webhook.py` needs only this."""
+
     model_config = SettingsConfigDict(
-        env_file=COOKBOOK_ROOT / ".env",
+        env_file=ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    # ---- Credo AI ---------------------------------------------------------
     credo_api_key: str
     credo_tenant: str
     # Integration Service host; the SDK appends /api/v1/integration itself.
     credo_api_base_url: str = "https://api.credo.ai"
-    # Where the "View model" button points. Never taken from a webhook payload.
+    # Where the buttons in emails point. Never taken from a webhook payload.
     credo_app_base_url: str = "https://app.credo.ai"
+    # How long owner, admin and user lookups are reused. One change in the app
+    # often sends several events, so this saves repeated reads.
+    recipient_cache_seconds: float = 300.0
 
+    @field_validator("credo_api_base_url", "credo_app_base_url")
+    @classmethod
+    def _strip_trailing_slash(cls, value: str) -> str:
+        return value.rstrip("/")
+
+
+class Settings(CredoSettings):
     # ---- Webhook endpoint -------------------------------------------------
     # The secret part of the webhook URL: POST /webhook/<token>.
     webhook_path_token: str
-    # Comma-separated. A recipient whose domain isn't listed is never emailed.
-    allowed_email_domains: str
+    # The endpoint's signing secret (`whsec_…`). Every delivery's Svix
+    # signature is checked against it. `setup_webhook.py` writes it.
+    webhook_signing_secret: str
 
     # ---- Email ------------------------------------------------------------
     smtp_host: str = ""
@@ -57,13 +74,27 @@ class Settings(BaseSettings):
     # Log each rendered email instead of sending it.
     mail_dry_run: bool = False
 
+    # ---- Scenarios --------------------------------------------------------
+    # Per-stage wording for the stage-change emails (#1, #4).
+    stage_messages_path: Path = SERVER_DIR / "stage_messages.yaml"
+
+    # ---- Reminders (#6, #8) -----------------------------------------------
+    # false = don't schedule them in this process; run `remind.py` from your
+    # own cron instead.
+    reminders_in_process: bool = True
+    # The timezone the cron expressions, the reminder periods and the dates in
+    # reminder emails use.
+    reminder_timezone: str = "UTC"
+    # Standard 5-field cron expressions.
+    pending_controls_cron: str = "0 9 * * mon"
+    questionnaire_reminder_cron: str = "0 9 * * *"
+    # A questionnaire is reminded about once its due date is this close, or past.
+    questionnaire_due_within_days: int = 7
+
     # ---- Server -----------------------------------------------------------
     host: str = "0.0.0.0"
     port: int = 8000
     database_path: Path = COOKBOOK_ROOT / "notifier.sqlite3"
-    # On the very first start, mark every model that already exists as
-    # "already emailed". See README "Why existing models are skipped".
-    seed_existing_models: bool = True
     # How many times a delivery is retried (Credo AI or SMTP unavailable)
     # before it is given up on and logged as failed. With the worker's backoff,
     # 9 attempts cover about an hour of outage.
@@ -76,24 +107,46 @@ class Settings(BaseSettings):
         value = value.strip()
         if len(value) < MIN_TOKEN_LENGTH:
             raise ValueError(
-                f"must be at least {MIN_TOKEN_LENGTH} characters; generate one with "
-                "python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+                f"must be at least {MIN_TOKEN_LENGTH} characters; run setup_webhook.py, "
+                "which generates one"
             )
         return value
 
-    @field_validator("allowed_email_domains")
+    @field_validator("webhook_signing_secret")
     @classmethod
-    def _domains_present(cls, value: str) -> str:
-        if not _split_domains(value):
+    def _secret_looks_right(cls, value: str) -> str:
+        value = value.strip()
+        hint = (
+            "must be the webhook's signing secret (starts with whsec_); run "
+            "setup_webhook.py, or copy it from Settings → Webhooks → Signing secret"
+        )
+        if not value.startswith("whsec_"):
+            raise ValueError(hint)
+        try:
+            Webhook(value)
+        except Exception:
+            raise ValueError(f"isn't a valid signing secret; {hint}") from None
+        return value
+
+    @field_validator("reminder_timezone")
+    @classmethod
+    def _known_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("must be an IANA timezone, e.g. America/New_York") from exc
+        return value
+
+    @field_validator("pending_controls_cron", "questionnaire_reminder_cron")
+    @classmethod
+    def _valid_cron(cls, value: str) -> str:
+        try:
+            CronTrigger.from_crontab(value)
+        except ValueError as exc:
             raise ValueError(
-                "list at least one domain, e.g. ALLOWED_EMAIL_DOMAINS=example.com"
-            )
+                f"not a 5-field cron expression ({exc}), e.g. '0 9 * * mon'"
+            ) from exc
         return value
-
-    @field_validator("credo_api_base_url", "credo_app_base_url")
-    @classmethod
-    def _strip_trailing_slash(cls, value: str) -> str:
-        return value.rstrip("/")
 
     @model_validator(mode="after")
     def _smtp_needed_unless_dry_run(self) -> Settings:
@@ -102,12 +155,8 @@ class Settings(BaseSettings):
         return self
 
     @property
-    def allowed_domains(self) -> frozenset[str]:
-        return _split_domains(self.allowed_email_domains)
-
-
-def _split_domains(raw: str) -> frozenset[str]:
-    return frozenset(d.strip().lower().lstrip("@") for d in raw.split(",") if d.strip())
+    def timezone(self) -> ZoneInfo:
+        return ZoneInfo(self.reminder_timezone)
 
 
 @lru_cache

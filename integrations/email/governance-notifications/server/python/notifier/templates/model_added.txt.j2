@@ -1,6 +1,6 @@
-Hi,
+Hi{% if person.given_name %} {{ person.given_name }}{% endif %},
 
-A new model was added to your organization's Credo AI model registry.
+You added a model to your organization's Credo AI model registry.
 
 Model:    {{ model.name }}
 {% if model.status and model.status != "none" %}Status:   {{ model.status }}
@@ -11,5 +11,4 @@ questionnaires attached to it.
 
 View the model: {{ link }}
 
---
-Sent by your organization's Credo AI notification service.
+{% include "_footer.txt.j2" %}
