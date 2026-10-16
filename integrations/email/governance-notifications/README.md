@@ -223,7 +223,8 @@ out tasks marked ready for validation, which wait on a reviewer rather than the 
 them), so its count can be lower than the app's. Controls with nobody assigned have no task, so they never
 appear. #8 counts a questionnaire that isn't complete and has a
 due date within `QUESTIONNAIRE_DUE_WITHIN_DAYS` or in the past; one without a due date is never reminded
-about.
+about. Credo AI marks a questionnaire complete once its required questions are answered, so one with no required
+questions is never marked; #8 also skips any questionnaire whose questions are all answered.
 
 ## Step 7: Try it
 

@@ -1,8 +1,9 @@
 """#8: daily check for questionnaires that are due soon or overdue → each use case owner.
 
-A questionnaire counts when it isn't complete (`completed_at` is empty) and its
-due date is within `QUESTIONNAIRE_DUE_WITHIN_DAYS`, or past. One without a due
-date is never reminded about. Each owner gets at most one email a day, listing
+A questionnaire counts when it isn't complete (`completed_at` is empty, and
+it isn't known to be fully answered) and its due date is within
+`QUESTIONNAIRE_DUE_WITHIN_DAYS`, or past. One without a due date is never
+reminded about. Each owner gets at most one email a day, listing
 every such questionnaire on the use cases they own, with how many questions
 are answered.
 """
@@ -42,8 +43,17 @@ def run(event: events.Event, ctx: Context) -> Outcome:
         pending = []
         for q in ctx.credo.questionnaires(use_case.id):
             due = _parse(q.due_date)
-            if q.completed_at is None and due is not None and due <= horizon:
-                pending.append((q, due.astimezone(tz)))
+            if q.completed_at is not None or due is None or due > horizon:
+                continue
+            counts = ctx.credo.answer_counts(use_case.id, q.id)
+            answered = counts.questions_with_answers if counts else None
+            unanswered = counts.questions_with_no_answers if counts else None
+            # `completed_at` is set only once every *required* question is
+            # answered, so a questionnaire with no required questions never
+            # gets one. Every question answered is done, whatever the flag.
+            if unanswered == 0:
+                continue
+            pending.append((q, due.astimezone(tz), counts, answered, unanswered))
         if not pending:
             continue
         owners = ctx.credo.owners(use_case.entity_id)
@@ -55,10 +65,7 @@ def run(event: events.Event, ctx: Context) -> Outcome:
             continue
         link = entity_link(ctx.settings, entity, "/questionnaires")
         items = []
-        for q, due in pending:
-            counts = ctx.credo.answer_counts(use_case.id, q.id)
-            answered = counts.questions_with_answers if counts else None
-            unanswered = counts.questions_with_no_answers if counts else None
+        for q, due, counts, answered, unanswered in pending:
             items.append(
                 Item(
                     use_case=use_case.name,

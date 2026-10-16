@@ -21,7 +21,7 @@ from datetime import datetime
 
 from notifier import events
 from notifier.app import build_context
-from notifier.config import get_settings
+from notifier.config import describe, get_settings
 from notifier.credo import CredoUnavailable
 from notifier.handlers import Drop
 from notifier.mailer import MailError
@@ -39,7 +39,7 @@ def main() -> int:
     try:
         settings = get_settings()
     except ValidationError as exc:
-        print(f"Configuration error in .env:\n{exc}", file=sys.stderr)
+        print(f"Configuration error in .env:\n{describe(exc)}", file=sys.stderr)
         return 2
     logging.basicConfig(
         level=settings.log_level.upper(),

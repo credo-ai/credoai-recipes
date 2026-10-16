@@ -7,13 +7,14 @@ than logging a warning and carrying on.
 
 from __future__ import annotations
 
+import base64
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from apscheduler.triggers.cron import CronTrigger
-from pydantic import field_validator, model_validator
+from pydantic import ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from svix.webhooks import Webhook
 
@@ -27,6 +28,9 @@ ENV_FILE = COOKBOOK_ROOT / ".env"
 # `secrets.token_urlsafe(32)` produces 43 characters; anything shorter than 32
 # is too easy to guess for a URL that should stay private.
 MIN_TOKEN_LENGTH = 32
+
+# A Svix signing secret is `whsec_` and the base64 of a 24-byte key.
+SIGNING_KEY_BYTES = 24
 
 
 class CredoSettings(BaseSettings):
@@ -122,10 +126,16 @@ class Settings(CredoSettings):
         )
         if not value.startswith("whsec_"):
             raise ValueError(hint)
+        # `Webhook()` decodes leniently, so it accepts some malformed secrets
+        # (`whsec_abc`) and every delivery then fails its signature check.
+        # Decode strictly and check the length Svix generates.
         try:
+            key = base64.b64decode(value.removeprefix("whsec_"), validate=True)
             Webhook(value)
         except Exception:
-            raise ValueError(f"isn't a valid signing secret; {hint}") from None
+            key = b""
+        if len(key) != SIGNING_KEY_BYTES:
+            raise ValueError(f"isn't a valid signing secret; {hint}")
         return value
 
     @field_validator("reminder_timezone")
@@ -162,3 +172,16 @@ class Settings(CredoSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def describe(exc: ValidationError) -> str:
+    """The settings errors, one per line, without the values that failed.
+
+    Pydantic's own message echoes the input, which here is the API key or the
+    signing secret, and would print it to the terminal or a log.
+    """
+    lines = []
+    for error in exc.errors(include_input=False, include_url=False):
+        name = ".".join(str(part) for part in error["loc"]).upper()
+        lines.append(f"  {name}: {error['msg']}" if name else f"  {error['msg']}")
+    return "\n".join(lines)

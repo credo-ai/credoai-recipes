@@ -26,7 +26,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from notifier import events
-from notifier.config import ENV_FILE, CredoSettings
+from notifier.config import ENV_FILE, CredoSettings, describe
 from notifier.credo import Credo, CredoUnavailable
 from pydantic import ValidationError
 
@@ -65,7 +65,7 @@ def main() -> int:
     try:
         settings = CredoSettings()
     except ValidationError as exc:
-        print(f"Configuration error in .env:\n{exc}", file=sys.stderr)
+        print(f"Configuration error in .env:\n{describe(exc)}", file=sys.stderr)
         return 2
 
     existing = _read_env(ENV_FILE)

@@ -14,7 +14,7 @@ import sys
 
 import uvicorn
 from notifier.app import create_app
-from notifier.config import get_settings
+from notifier.config import describe, get_settings
 from notifier.stages import StageMessages
 from pydantic import ValidationError
 from yaml import YAMLError
@@ -24,7 +24,7 @@ def main() -> int:
     try:
         settings = get_settings()
     except ValidationError as exc:
-        print(f"Configuration error in .env:\n{exc}", file=sys.stderr)
+        print(f"Configuration error in .env:\n{describe(exc)}", file=sys.stderr)
         return 2
     try:
         StageMessages(settings.stage_messages_path)
