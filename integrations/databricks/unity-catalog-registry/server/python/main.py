@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterator
 
 import httpx
@@ -81,6 +81,12 @@ FULL_SWEEP_EVERY_N_CYCLES = max(
     1, int(os.environ.get("FULL_SWEEP_EVERY_N_CYCLES", "20"))
 )
 
+# A model that fails this many syncs in a row stops holding the watermark back.
+# Without a cap, one permanently failing model keeps the watermark below every
+# other model's `updated_at`, so every cycle re-syncs the whole registry. It is
+# still retried on each full sweep, which ignores the watermark.
+MAX_FAILED_SYNCS = 3
+
 # Pause between the per-model detail calls. Small, but it is what keeps a
 # large metastore from tripping the UC rate limit on a full sweep.
 REQUEST_DELAY_SECONDS = float(os.environ.get("REQUEST_DELAY_SECONDS", "0.1"))
@@ -102,10 +108,13 @@ class SyncState:
 
     watermark_ms: int = 0
     cycles: int = 0
+    failures: dict[str, int] = field(default_factory=dict)
 
 
 class CredoApiError(RuntimeError):
-    pass
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class CredoClient:
@@ -120,12 +129,17 @@ class CredoClient:
         self._token: str | None = None
 
     def _get_token(self) -> str:
-        resp = self._client.post(
-            f"{CREDO_BASE_URL}/auth/token",
-            headers={"X-API-Key": CREDO_API_KEY, "X-Tenant": CREDO_TENANT},
-            timeout=30,
-        )
-        resp.raise_for_status()
+        # Wrapped so callers only ever have to catch CredoApiError, including
+        # for network failures and a rejected token exchange.
+        try:
+            resp = self._client.post(
+                f"{CREDO_BASE_URL}/auth/token",
+                headers={"X-API-Key": CREDO_API_KEY, "X-Tenant": CREDO_TENANT},
+                timeout=30,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise CredoApiError(f"token exchange failed: {exc}") from exc
         return resp.json()["access_token"]
 
     def _request(
@@ -140,17 +154,20 @@ class CredoClient:
         for attempt in range(3):
             if self._token is None:
                 self._token = self._get_token()
-            resp = self._client.request(
-                method,
-                f"{CREDO_BASE_URL}{path}",
-                json=json_body,
-                params=params,
-                headers={
-                    "Authorization": f"Bearer {self._token}",
-                    "X-Tenant": CREDO_TENANT,
-                },
-                timeout=30,
-            )
+            try:
+                resp = self._client.request(
+                    method,
+                    f"{CREDO_BASE_URL}{path}",
+                    json=json_body,
+                    params=params,
+                    headers={
+                        "Authorization": f"Bearer {self._token}",
+                        "X-Tenant": CREDO_TENANT,
+                    },
+                    timeout=30,
+                )
+            except httpx.RequestError as exc:
+                raise CredoApiError(f"{method} {path} failed: {exc}") from exc
             # Refresh once, then treat a second 401 as a real credential
             # problem rather than looping on it.
             if resp.status_code == 401 and not refreshed:
@@ -164,7 +181,8 @@ class CredoClient:
                 continue
             if resp.status_code >= 400:
                 raise CredoApiError(
-                    f"{method} {path} failed: {resp.status_code} {resp.text[:500]}"
+                    f"{method} {path} failed: {resp.status_code} {resp.text[:500]}",
+                    status_code=resp.status_code,
                 )
             return resp
         raise CredoApiError(f"{method} {path} failed after 3 attempts")
@@ -217,8 +235,18 @@ def upsert_model(credo: CredoClient, model_name: str, summary: str) -> tuple[str
     """
     existing_id = MODEL_IDS.get(model_name)
     if existing_id:
-        credo.patch_model(existing_id, {"summary": summary})
-        return "updated", existing_id
+        try:
+            credo.patch_model(existing_id, {"summary": summary})
+            return "updated", existing_id
+        except CredoApiError as exc:
+            if exc.status_code != 404:
+                raise
+            # Deleted in Credo AI after we cached its id. Forget it and fall
+            # through to create, otherwise every later sync 404s forever.
+            log.warning(
+                "Credo AI model %s (%s) is gone; recreating", model_name, existing_id
+            )
+            MODEL_IDS.pop(model_name, None)
 
     created = credo.create_model(
         {"name": model_name, "summary": summary, "source": SOURCE}
@@ -299,11 +327,24 @@ def run_cycle(credo: CredoClient, workspace: WorkspaceClient, state: SyncState) 
             action = sync_model(credo, workspace, model)
         except (CredoApiError, DatabricksError) as exc:
             failed += 1
-            lowest_failed = (
-                updated_at if lowest_failed is None else min(lowest_failed, updated_at)
-            )
-            log.warning("skipping %s: %s", model.full_name, exc)
+            name = model.full_name or ""
+            state.failures[name] = state.failures.get(name, 0) + 1
+            if state.failures[name] <= MAX_FAILED_SYNCS:
+                lowest_failed = (
+                    updated_at
+                    if lowest_failed is None
+                    else min(lowest_failed, updated_at)
+                )
+                log.warning("skipping %s: %s", name, exc)
+            else:
+                log.warning(
+                    "skipping %s: %s (failed %d times; retrying on full sweeps only)",
+                    name,
+                    exc,
+                    state.failures[name],
+                )
             continue
+        state.failures.pop(model.full_name or "", None)
         if action == "created":
             created += 1
         else:
@@ -313,7 +354,8 @@ def run_cycle(credo: CredoClient, workspace: WorkspaceClient, state: SyncState) 
 
     # Never advance past work that did not land. Anything at or after the
     # earliest failure is left below the watermark so the next cycle retries
-    # it, rather than skipping it forever.
+    # it, rather than skipping it forever. Models over MAX_FAILED_SYNCS are
+    # excluded from that, so they can't pin the watermark indefinitely.
     if lowest_failed is not None:
         highest_synced = min(highest_synced, lowest_failed - 1)
     state.watermark_ms = max(state.watermark_ms, highest_synced)
@@ -349,9 +391,22 @@ def main() -> None:
         # Learn what Credo AI already has before touching anything, so the
         # first sync patches existing models instead of creating a second one
         # with the same name.
+        # A model another source already owns under the same name is left
+        # alone, or its summary would be overwritten. Only a source that is
+        # visibly a different string is skipped: if the list response shapes
+        # `source` some other way, this falls back to name-only.
+        foreign = 0
         for model in credo.list_models():
+            source = model.get("source")
+            if isinstance(source, str) and source != SOURCE:
+                foreign += 1
+                continue
             MODEL_IDS.setdefault(model["name"], model["id"])
-        log.info("seeded %d existing Credo AI model(s)", len(MODEL_IDS))
+        log.info(
+            "seeded %d existing Credo AI model(s); ignored %d from other sources",
+            len(MODEL_IDS),
+            foreign,
+        )
 
         # state.cycles == 0, so the first cycle is a full sweep: every model
         # in the registry syncs on start, not just whatever changed while this

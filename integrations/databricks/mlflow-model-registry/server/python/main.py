@@ -16,11 +16,13 @@ Run: python main.py
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
 import logging
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
 from typing import Any
@@ -28,6 +30,7 @@ from typing import Any
 import httpx
 import uvicorn
 from databricks.sdk import WorkspaceClient
+from databricks.sdk.errors import DatabricksError
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 
@@ -54,6 +57,13 @@ SOURCE = "Databricks"
 # DATABRICKS_HOST / DATABRICKS_TOKEN are read by the SDK's unified auth, not
 # here — this bridge never touches them directly.
 DATABRICKS_WEBHOOK_SECRET = os.environ.get("DATABRICKS_WEBHOOK_SECRET", "")
+# Without a secret the endpoint can't tell Databricks from anyone else, so it
+# refuses to start unless this is set. Local curl testing only.
+ALLOW_UNSIGNED_WEBHOOKS = os.environ.get("ALLOW_UNSIGNED_WEBHOOKS", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Events this bridge understands. Databricks supports several more
 # (TRANSITION_REQUEST_CREATED, COMMENT_CREATED, ...); anything else is
@@ -77,9 +87,29 @@ WEBHOOK_PATH = "/webhooks/databricks-mlflow"
 # state file has to survive between runs.
 MODEL_IDS: dict[str, str] = {}
 
+# Credo AI model name -> highest Databricks version recorded in its summary.
+# Webhooks are retried and can arrive out of order; this is what stops a late
+# delivery for an older version from overwriting newer state.
+MODEL_VERSIONS: dict[str, int] = {}
+
+# Webhook handlers run in worker threads, and the check-then-create on
+# MODEL_IDS must not interleave or the same name gets created twice. The lock
+# is per model name, not global: upsert_model does blocking HTTP with retries,
+# and one slow Credo AI call must not stall deliveries for unrelated models.
+# _STATE_LOCK only guards the lock table itself.
+_STATE_LOCK = threading.Lock()
+_MODEL_LOCKS: dict[str, threading.Lock] = {}
+
+
+def _model_lock(model_name: str) -> threading.Lock:
+    with _STATE_LOCK:
+        return _MODEL_LOCKS.setdefault(model_name, threading.Lock())
+
 
 class CredoApiError(RuntimeError):
-    pass
+    def __init__(self, message: str, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class CredoClient:
@@ -94,12 +124,17 @@ class CredoClient:
         self._token: str | None = None
 
     def _get_token(self) -> str:
-        resp = self._client.post(
-            f"{CREDO_BASE_URL}/auth/token",
-            headers={"X-API-Key": CREDO_API_KEY, "X-Tenant": CREDO_TENANT},
-            timeout=30,
-        )
-        resp.raise_for_status()
+        # Wrapped so callers only ever have to catch CredoApiError, including
+        # for network failures and a rejected token exchange.
+        try:
+            resp = self._client.post(
+                f"{CREDO_BASE_URL}/auth/token",
+                headers={"X-API-Key": CREDO_API_KEY, "X-Tenant": CREDO_TENANT},
+                timeout=30,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise CredoApiError(f"token exchange failed: {exc}") from exc
         return resp.json()["access_token"]
 
     def _request(
@@ -114,17 +149,20 @@ class CredoClient:
         for attempt in range(3):
             if self._token is None:
                 self._token = self._get_token()
-            resp = self._client.request(
-                method,
-                f"{CREDO_BASE_URL}{path}",
-                json=json_body,
-                params=params,
-                headers={
-                    "Authorization": f"Bearer {self._token}",
-                    "X-Tenant": CREDO_TENANT,
-                },
-                timeout=30,
-            )
+            try:
+                resp = self._client.request(
+                    method,
+                    f"{CREDO_BASE_URL}{path}",
+                    json=json_body,
+                    params=params,
+                    headers={
+                        "Authorization": f"Bearer {self._token}",
+                        "X-Tenant": CREDO_TENANT,
+                    },
+                    timeout=30,
+                )
+            except httpx.RequestError as exc:
+                raise CredoApiError(f"{method} {path} failed: {exc}") from exc
             # Refresh once, then treat a second 401 as a real credential
             # problem rather than looping on it.
             if resp.status_code == 401 and not refreshed:
@@ -138,7 +176,8 @@ class CredoClient:
                 continue
             if resp.status_code >= 400:
                 raise CredoApiError(
-                    f"{method} {path} failed: {resp.status_code} {resp.text[:500]}"
+                    f"{method} {path} failed: {resp.status_code} {resp.text[:500]}",
+                    status_code=resp.status_code,
                 )
             return resp
         raise CredoApiError(f"{method} {path} failed after 3 attempts")
@@ -168,7 +207,9 @@ def verify_signature(secret: str, body: bytes, signature_header: str | None) -> 
     if not signature_header:
         return False
     expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature_header)
+    # Bytes, not str: compare_digest raises TypeError on a non-ASCII str, which
+    # an unauthenticated caller could use to turn the 403 into a 500.
+    return hmac.compare_digest(expected.encode(), signature_header.encode())
 
 
 def build_summary(
@@ -187,7 +228,8 @@ def build_summary(
         if version
         else "Databricks MLflow model."
     )
-    if stage:
+    # Databricks reports an unstaged version as the literal string "None".
+    if stage and stage.lower() != "none":
         if from_stage:
             text += f" Transitioned {from_stage} -> {stage}."
         else:
@@ -204,8 +246,21 @@ def upsert_model(credo: CredoClient, model_name: str, summary: str) -> tuple[str
     """
     existing_id = MODEL_IDS.get(model_name)
     if existing_id:
-        credo.patch_model(existing_id, {"summary": summary})
-        return "updated", existing_id
+        try:
+            credo.patch_model(existing_id, {"summary": summary})
+            return "updated", existing_id
+        except CredoApiError as exc:
+            if exc.status_code != 404:
+                raise
+            # Deleted in Credo AI after we cached its id. Forget it and fall
+            # through to create, otherwise every later event 404s forever.
+            log.warning(
+                "Credo AI model %s (%s) is gone; recreating", model_name, existing_id
+            )
+            MODEL_IDS.pop(model_name, None)
+            # The new record starts with no history, so the version
+            # high-water mark for the old one no longer applies.
+            MODEL_VERSIONS.pop(model_name, None)
 
     created = credo.create_model(
         {"name": model_name, "summary": summary, "source": SOURCE}
@@ -215,13 +270,24 @@ def upsert_model(credo: CredoClient, model_name: str, summary: str) -> tuple[str
     return "created", model_id
 
 
-def handle_event(payload: dict, credo: CredoClient) -> dict:
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def handle_event(payload: Any, credo: CredoClient) -> dict:
     """Upsert the Credo AI Model named by this event.
 
     Every outcome here is a 200 — an event we don't handle, or one without a
     model name, is not something Databricks should retry. Only a Credo AI API
     failure propagates, so a 500 always means "worth retrying".
     """
+    if not isinstance(payload, dict):
+        log.warning("webhook body is not a JSON object — ignoring")
+        return {"action": "ignored_malformed_body"}
+
     event = payload.get("event", "")
     if event not in HANDLED_EVENTS:
         return {"action": "ignored_event_type", "event": event}
@@ -232,12 +298,41 @@ def handle_event(payload: dict, credo: CredoClient) -> dict:
         return {"action": "ignored_missing_model_name"}
 
     version = payload.get("version")
+    version_num = _as_int(version)
     summary = build_summary(
         str(version) if version else None,
         stage=payload.get("to_stage"),
         from_stage=payload.get("from_stage"),
     )
-    action, model_id = upsert_model(credo, model_name, summary)
+    with _model_lock(model_name):
+        # Deliveries are retried and can arrive out of order. Anything that
+        # carries no newer information than what the summary already holds is
+        # dropped instead of overwriting it.
+        if event == "REGISTERED_MODEL_CREATED":
+            if model_name in MODEL_IDS and model_name not in MODEL_VERSIONS:
+                return {"action": "ignored_already_known", "model_name": model_name}
+            # A creation event for a name that already has recorded versions
+            # means it was deleted and re-registered in Databricks (version
+            # numbers restart at 1), so the old high-water mark would make
+            # every new event look stale. A late retry of the original
+            # creation event also lands here; that costs one summary rewrite,
+            # which the next version event corrects.
+            MODEL_VERSIONS.pop(model_name, None)
+        known = MODEL_VERSIONS.get(model_name)
+        if version_num is not None and known is not None:
+            if version_num < known or (
+                version_num == known and event == "MODEL_VERSION_CREATED"
+            ):
+                log.info(
+                    "stale %s for %s v%s (have v%s)", event, model_name, version, known
+                )
+                return {"action": "ignored_stale_event", "model_name": model_name}
+        action, model_id = upsert_model(credo, model_name, summary)
+        if version_num is not None:
+            # Re-read: upsert_model resets it when it had to recreate the model.
+            MODEL_VERSIONS[model_name] = max(
+                version_num, MODEL_VERSIONS.get(model_name, 0)
+            )
     log.info("%s Credo AI model %s (%s) from %s", action, model_id, model_name, event)
     return {
         "action": action,
@@ -253,33 +348,56 @@ def backfill(credo: CredoClient, workspace: WorkspaceClient) -> None:
     Runs at every startup. Idempotent — anything already in Credo AI is
     patched, not duplicated — so restarting after downtime closes whatever
     gap the webhook missed. A single unreadable model is logged and skipped
-    rather than aborting the run and leaving the rest unsynced.
+    rather than aborting the run and leaving the rest unsynced. If listing the
+    registry itself fails, the backfill stops there and the server still
+    starts: the webhooks work without it.
+
+    Runs before the server accepts requests, so it doesn't take the per-model
+    locks.
     """
     registry = created = updated = failed = 0
-    for model in workspace.model_registry.list_models():
-        registry += 1
-        model_name = model.name
-        if not model_name:
-            failed += 1
-            continue
-        try:
-            # `latest_versions` holds one entry per stage; the highest version
-            # number is the most recent registration.
-            latest = max(
-                (v for v in (model.latest_versions or []) if v.version),
-                key=lambda v: int(v.version),
-                default=None,
-            )
-            stage = latest.current_stage if latest else None
-            summary = build_summary(latest.version if latest else None, stage=stage)
-            action, _ = upsert_model(credo, model_name, summary)
-            if action == "created":
-                created += 1
-            else:
-                updated += 1
-        except (CredoApiError, ValueError) as exc:
-            failed += 1
-            log.warning("backfill: skipping %s: %s", model_name, exc)
+    try:
+        for model in workspace.model_registry.list_models():
+            registry += 1
+            model_name = model.name
+            if not model_name:
+                failed += 1
+                continue
+            try:
+                # `latest_versions` holds one entry per active stage and can
+                # leave out a higher-numbered Archived version, so it can't
+                # say which version is newest. Search the versions instead;
+                # the highest number is the most recent registration.
+                latest = max(
+                    (
+                        v
+                        for v in workspace.model_registry.search_model_versions(
+                            filter=f"name='{model_name}'"
+                        )
+                        if v.version
+                    ),
+                    key=lambda v: int(v.version),
+                    default=None,
+                )
+                stage = latest.current_stage if latest else None
+                summary = build_summary(latest.version if latest else None, stage=stage)
+                action, _ = upsert_model(credo, model_name, summary)
+                if latest:
+                    MODEL_VERSIONS[model_name] = int(latest.version)
+                if action == "created":
+                    created += 1
+                else:
+                    updated += 1
+            except Exception as exc:  # one bad model must not stop startup
+                failed += 1
+                log.warning(
+                    "backfill: skipping %s: %s: %s",
+                    model_name,
+                    type(exc).__name__,
+                    exc,
+                )
+    except DatabricksError as exc:
+        log.error("backfill: could not list the Databricks registry: %s", exc)
 
     log.info(
         "backfill: registry=%d created=%d updated=%d failed=%d",
@@ -293,8 +411,14 @@ def backfill(credo: CredoClient, workspace: WorkspaceClient) -> None:
 def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        # Clients are built here rather than at import time so the module can
-        # be imported (and the pure functions tested) without credentials.
+        # Clients are built here rather than at import time, so importing the
+        # module opens no connections. It still needs the CREDO_* variables.
+        if not DATABRICKS_WEBHOOK_SECRET and not ALLOW_UNSIGNED_WEBHOOKS:
+            raise RuntimeError(
+                "DATABRICKS_WEBHOOK_SECRET is not set, so webhook deliveries "
+                "can't be verified. Set it, or set ALLOW_UNSIGNED_WEBHOOKS=true "
+                "for a local test."
+            )
         with httpx.Client() as credo_http:
             credo = CredoClient(credo_http)
             app.state.credo = credo
@@ -305,9 +429,22 @@ def create_app() -> FastAPI:
             # Learn what Credo AI already has before touching anything, so
             # both the backfill and the webhook handler patch existing models
             # instead of creating a second one with the same name.
+            # A model another source already owns under the same name is left
+            # alone, or its summary would be overwritten. Only a source that
+            # is visibly a different string is skipped: if the list response
+            # shapes `source` some other way, this falls back to name-only.
+            foreign = 0
             for model in credo.list_models():
+                source = model.get("source")
+                if isinstance(source, str) and source != SOURCE:
+                    foreign += 1
+                    continue
                 MODEL_IDS.setdefault(model["name"], model["id"])
-            log.info("seeded %d existing Credo AI model(s)", len(MODEL_IDS))
+            log.info(
+                "seeded %d existing Credo AI model(s); ignored %d from other sources",
+                len(MODEL_IDS),
+                foreign,
+            )
 
             backfill(credo, workspace)
             yield
@@ -317,6 +454,8 @@ def create_app() -> FastAPI:
     @app.post(WEBHOOK_PATH)
     async def databricks_webhook(request: Request) -> dict:
         body = await request.body()
+        # Keyed on the secret, not the flag: ALLOW_UNSIGNED_WEBHOOKS only lets
+        # the server start without one, it never disables a configured check.
         if DATABRICKS_WEBHOOK_SECRET and not verify_signature(
             DATABRICKS_WEBHOOK_SECRET,
             body,
@@ -325,9 +464,17 @@ def create_app() -> FastAPI:
             raise HTTPException(
                 status_code=403, detail="Bad or missing X-Databricks-Signature"
             )
-        payload = json.loads(body) if body else {}
         try:
-            result = handle_event(payload, request.app.state.credo)
+            payload = json.loads(body) if body else {}
+        except ValueError:
+            log.warning("webhook body is not valid JSON — ignoring")
+            return {"ok": True, "action": "ignored_malformed_body"}
+        try:
+            # handle_event does blocking HTTP and sleeps on retry; keep that
+            # off the event loop so /health and other deliveries aren't stalled.
+            result = await asyncio.to_thread(
+                handle_event, payload, request.app.state.credo
+            )
         except CredoApiError as exc:
             # 500 so Databricks can retry — the model genuinely didn't sync.
             log.error("failed to upsert Credo AI model: %s", exc)

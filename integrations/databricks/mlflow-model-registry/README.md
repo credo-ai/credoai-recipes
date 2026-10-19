@@ -152,7 +152,7 @@ curl -X POST http://localhost:5000/webhooks/databricks-mlflow \
 
 Expected: `{"ok":true,"action":"created","model_id":"...","model_name":"credit-risk-xgboost","version":"4"}`.
 Send it again and `action` becomes `updated` — that is the no-duplicates behavior. Leave
-`DATABRICKS_WEBHOOK_SECRET` blank for this test, or sign the body (see [TESTING.md](./TESTING.md)).
+`DATABRICKS_WEBHOOK_SECRET` blank and set `ALLOW_UNSIGNED_WEBHOOKS=true` for this test, or sign the body (see [TESTING.md](./TESTING.md)).
 
 ---
 
@@ -173,15 +173,16 @@ data fails quietly — don't.
 
 ## Troubleshooting
 
-| Symptom                                          | Likely Cause                                            | Fix                                                                       |
-| ------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `422` on every model create                      | The `Databricks` source doesn't exist                   | Run `python setup_credo_source.py` (Step 2)                               |
-| Nothing arrives when a model changes             | Models are in Unity Catalog, which emits no webhooks    | Use the [Unity Catalog cookbook](../unity-catalog-registry) instead       |
-| Webhook registered, still no deliveries          | `PUBLIC_BASE_URL` is stale — ngrok rotated it           | Re-run `register_webhook.py register`, then `delete` the old webhook      |
-| `403 Bad or missing X-Databricks-Signature`      | `DATABRICKS_WEBHOOK_SECRET` doesn't match the webhook's | Re-register the webhook, or clear the variable for an unsigned local test |
-| Duplicate models in Credo AI                     | The model was renamed in Databricks                     | Models match by name only; merge them in Credo AI                         |
-| A new model doesn't sync until its first version | The webhook is scoped via `DATABRICKS_MODEL_NAME`       | Leave it blank so `REGISTERED_MODEL_CREATED` is included                  |
-| `401` after startup                              | Wrong `CREDO_API_KEY` or `CREDO_TENANT`                 | The token is refreshed once, then gives up — check both values            |
+| Symptom                                          | Likely Cause                                            | Fix                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `422` on every model create                      | The `Databricks` source doesn't exist                   | Run `python setup_credo_source.py` (Step 2)                                                   |
+| Nothing arrives when a model changes             | Models are in Unity Catalog, which emits no webhooks    | Use the [Unity Catalog cookbook](../unity-catalog-registry) instead                           |
+| Webhook registered, still no deliveries          | `PUBLIC_BASE_URL` is stale — ngrok rotated it           | Re-run `register_webhook.py register`, then `delete` the old webhook                          |
+| `403 Bad or missing X-Databricks-Signature`      | `DATABRICKS_WEBHOOK_SECRET` doesn't match the webhook's | Re-register the webhook, or, locally, blank the secret and set `ALLOW_UNSIGNED_WEBHOOKS=true` |
+| Server exits at startup naming the secret        | `DATABRICKS_WEBHOOK_SECRET` is blank                    | Set it, then re-register the webhook so both sides share it                                   |
+| Duplicate models in Credo AI                     | The model was renamed in Databricks                     | Models match by name only; merge them in Credo AI                                             |
+| A new model doesn't sync until its first version | The webhook is scoped via `DATABRICKS_MODEL_NAME`       | Leave it blank so `REGISTERED_MODEL_CREATED` is included                                      |
+| `401` after startup                              | Wrong `CREDO_API_KEY` or `CREDO_TENANT`                 | The token is refreshed once, then gives up — check both values                                |
 
 Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
 

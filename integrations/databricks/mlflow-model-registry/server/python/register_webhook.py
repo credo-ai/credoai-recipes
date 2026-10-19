@@ -48,9 +48,23 @@ def cmd_register(workspace: WorkspaceClient) -> int:
     model_name = os.environ.get("DATABRICKS_MODEL_NAME", "").strip() or None
     secret = os.environ.get("DATABRICKS_WEBHOOK_SECRET", "").strip() or None
     if not secret:
+        # main.py refuses to start without a secret, so a webhook registered
+        # without one would just fail every delivery until it is deleted.
+        if os.environ.get("ALLOW_UNSIGNED_WEBHOOKS", "").lower() not in (
+            "1",
+            "true",
+            "yes",
+        ):
+            print(
+                "DATABRICKS_WEBHOOK_SECRET is required: main.py won't start "
+                "without it (see .env.example). Set ALLOW_UNSIGNED_WEBHOOKS=true "
+                "to register an unsigned webhook for a local test.",
+                file=sys.stderr,
+            )
+            return 1
         print(
             "warning: DATABRICKS_WEBHOOK_SECRET is unset — deliveries will be "
-            "unsigned and main.py will accept them unverified.",
+            "unsigned.",
             file=sys.stderr,
         )
 
