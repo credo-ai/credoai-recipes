@@ -173,7 +173,9 @@ curl -X POST http://localhost:5000/webhooks/databricks-mlflow \
 ```
 
 Expected: `{"ok":true,"action":"created","model_id":"...","model_name":"credit-risk-xgboost","version":"4"}`.
-Send it again and `action` becomes `updated` — that is the no-duplicates behavior. Leave
+Send it again and `action` becomes `ignored_stale_event` — a redelivery adds nothing new. Send it
+with `"version": "5"` and `action` becomes `updated` on the same `model_id` — that is the
+no-duplicates behavior. Leave
 `DATABRICKS_WEBHOOK_SECRET` blank and set `ALLOW_UNSIGNED_WEBHOOKS=true` for this test, or sign the body (see [TESTING.md](./TESTING.md)).
 
 ---
@@ -227,8 +229,10 @@ it forgets the id and creates the model again on the same event, instead of fail
 name. A webhook for a lower version, or a repeat of the same one, is acknowledged with `200` and
 `"action":"ignored_stale_event"` and the summary is left as it was. A `REGISTERED_MODEL_CREATED` for
 a name that already has recorded versions is treated as delete-and-re-register in Databricks, which
-restarts version numbering at 1, so that mark is reset. The mark is held in memory; the startup
-backfill rebuilds it from the registry.
+restarts version numbering at 1, so that mark is reset. A webhook scoped via `DATABRICKS_MODEL_NAME`
+never receives that event, so there a `MODEL_VERSION_CREATED` for version 1 arriving after higher
+versions does the same reset. The mark is held in memory; the startup backfill rebuilds it from the
+registry.
 
 ---
 
@@ -243,6 +247,12 @@ backfill rebuilds it from the registry.
   as a logged error for a webhook delivery).
 - **Only the latest version and stage are recorded**, as text in `summary`. Credo AI has no field
   for version history, run ids or metrics.
+- **Startup scales with the registry.** The backfill makes one version search per model before the
+  server starts listening, so a large registry means a slow start, and deliveries made meanwhile
+  are refused until it finishes. Databricks retries those; the backfill itself reads current state,
+  so it closes most of the gap.
+- **Model names containing both `'` and `"` are skipped by the backfill**, because the version
+  search filter has no documented way to quote them. They still sync from webhook deliveries.
 - **Legacy Workspace Model Registry only.** Models in Unity Catalog emit no registry webhooks, so
   they are never seen — use the [Unity Catalog cookbook](../unity-catalog-registry).
 

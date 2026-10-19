@@ -22,7 +22,6 @@ from typing import Any, Iterator
 
 import httpx
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.errors import DatabricksError
 from databricks.sdk.service.catalog import RegisteredModelInfo
 from dotenv import load_dotenv
 
@@ -68,8 +67,8 @@ if bool(DATABRICKS_CATALOG) != bool(DATABRICKS_SCHEMA):
     )
 
 # ---- Tuning -----------------------------------------------------------
-# Longer than the Splunk poller's 60s on purpose: a cycle costs two Unity
-# Catalog calls per *changed* model, and UC rate-limits per account
+# Longer than the Splunk poller's 60s on purpose: a cycle costs at least two
+# Unity Catalog calls per *changed* model, and UC rate-limits per account
 # (REQUEST_LIMIT_EXCEEDED / UC_REQUEST_LIMIT_EXCEEDED).
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "300"))
 
@@ -286,16 +285,18 @@ def sync_model(
 ) -> str:
     """Upsert one Unity Catalog model into Credo AI. Returns the action taken.
 
-    Two UC calls, and both are needed: `registered_models.list` omits aliases,
-    and `model_versions.list` documents that its results "will not contain any
-    aliases or tags" -- only `registered_models.get(include_aliases=True)` has
-    them. The latest version number has no home on the registered model at
-    all, so it takes the version listing.
+    Two kinds of UC call, and both are needed: `registered_models.list` omits
+    aliases, and `model_versions.list` documents that its results "will not
+    contain any aliases or tags" -- only
+    `registered_models.get(include_aliases=True)` has them. The latest version
+    number has no home on the registered model at all, so it takes the version
+    listing. That listing has no guaranteed order, so every page is read; it
+    asks for the largest page the server allows to keep that to few calls.
     """
     full_name = model.full_name or ""
     detail = workspace.registered_models.get(full_name, include_aliases=True)
     time.sleep(REQUEST_DELAY_SECONDS)
-    versions = workspace.model_versions.list(full_name)
+    versions = workspace.model_versions.list(full_name, max_results=1000)
     latest = max(
         (v.version for v in versions if v.version is not None),
         default=None,
@@ -320,14 +321,22 @@ def run_cycle(credo: CredoClient, workspace: WorkspaceClient, state: SyncState) 
         updated_at = model.updated_at or 0
         # The whole point of the watermark: skip the two per-model detail
         # calls for anything that has not moved since the last cycle.
-        if not full_sweep and updated_at <= state.watermark_ms:
+        # A model that failed before is retried even when its `updated_at` is
+        # at or below the watermark -- which is where it sits after a failure
+        # on a full sweep, since the sweep ignores the watermark.
+        name = model.full_name or ""
+        retrying = 0 < state.failures.get(name, 0) <= MAX_FAILED_SYNCS
+        if not full_sweep and updated_at <= state.watermark_ms and not retrying:
             continue
         changed += 1
         try:
             action = sync_model(credo, workspace, model)
-        except (CredoApiError, DatabricksError) as exc:
+        # Broader than CredoApiError/DatabricksError on purpose: the SDK lets
+        # TimeoutError and raw `requests` errors through, and the Credo AI
+        # client can raise on a malformed response body. One model failing
+        # any of those must not abort the cycle.
+        except Exception as exc:
             failed += 1
-            name = model.full_name or ""
             state.failures[name] = state.failures.get(name, 0) + 1
             if state.failures[name] <= MAX_FAILED_SYNCS:
                 lowest_failed = (
@@ -335,10 +344,10 @@ def run_cycle(credo: CredoClient, workspace: WorkspaceClient, state: SyncState) 
                     if lowest_failed is None
                     else min(lowest_failed, updated_at)
                 )
-                log.warning("skipping %s: %s", name, exc)
+                log.warning("skipping %s: %r", name, exc)
             else:
                 log.warning(
-                    "skipping %s: %s (failed %d times; retrying on full sweeps only)",
+                    "skipping %s: %r (failed %d times; retrying on full sweeps only)",
                     name,
                     exc,
                     state.failures[name],
@@ -355,7 +364,9 @@ def run_cycle(credo: CredoClient, workspace: WorkspaceClient, state: SyncState) 
     # Never advance past work that did not land. Anything at or after the
     # earliest failure is left below the watermark so the next cycle retries
     # it, rather than skipping it forever. Models over MAX_FAILED_SYNCS are
-    # excluded from that, so they can't pin the watermark indefinitely.
+    # excluded from that, so they can't pin the watermark indefinitely. A
+    # failure at or below the watermark can't be held back this way; the
+    # `retrying` check above is what picks those up.
     if lowest_failed is not None:
         highest_synced = min(highest_synced, lowest_failed - 1)
     state.watermark_ms = max(state.watermark_ms, highest_synced)
@@ -414,12 +425,11 @@ def main() -> None:
         while True:
             try:
                 run_cycle(credo, workspace, state)
-            except DatabricksError as e:
-                log.error("Databricks error: %s", e)
-            except httpx.HTTPStatusError as e:
-                log.error("HTTP error: %s", e)
-            except httpx.RequestError as e:
-                log.error("network error: %s", e)
+            except Exception:
+                # Listing the registry is the one thing run_cycle doesn't
+                # guard per model. Whatever it raises, the poller outlives it
+                # and tries again next interval instead of exiting.
+                log.exception("cycle failed; retrying in %ds", POLL_INTERVAL_SECONDS)
             time.sleep(POLL_INTERVAL_SECONDS)
 
 

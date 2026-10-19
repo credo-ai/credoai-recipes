@@ -46,7 +46,7 @@ models that actually changed.
 
 Unity Catalog offers no server-side change filter — no `updated_since`, no `order_by`, no timestamp
 predicate — so every cycle has to enumerate every model. That part is cheap: one paginated call
-covers the whole metastore. The expensive part is the per-model detail (two calls each), and that is
+covers the whole metastore. The expensive part is the per-model detail (two calls each, more for a model with over 1,000 versions), and that is
 what the watermark skips. A steady-state cycle with nothing changed makes exactly one API call and
 writes nothing.
 

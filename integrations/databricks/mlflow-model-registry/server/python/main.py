@@ -111,6 +111,18 @@ class CredoApiError(RuntimeError):
         super().__init__(message)
         self.status_code = status_code
 
+    @property
+    def retryable(self) -> bool:
+        """Whether redelivering the same event could succeed.
+
+        No status means the request never got an answer (network, token
+        exchange). 401/403 are credential problems an operator can fix while
+        retries are still coming. Any other 4xx rejects this payload and will
+        reject every redelivery of it.
+        """
+        code = self.status_code
+        return code is None or code >= 500 or code in (401, 403, 408, 429)
+
 
 class CredoClient:
     """Credo AI public Integration API.
@@ -228,9 +240,10 @@ def build_summary(
         if version
         else "Databricks MLflow model."
     )
-    # Databricks reports an unstaged version as the literal string "None".
+    # Databricks reports an unstaged version as the literal string "None",
+    # for the stage it moved from as well as the one it is in.
     if stage and stage.lower() != "none":
-        if from_stage:
+        if from_stage and from_stage.lower() != "none":
             text += f" Transitioned {from_stage} -> {stage}."
         else:
             text += f" Current stage: {stage}."
@@ -282,7 +295,7 @@ def handle_event(payload: Any, credo: CredoClient) -> dict:
 
     Every outcome here is a 200 — an event we don't handle, or one without a
     model name, is not something Databricks should retry. Only a Credo AI API
-    failure propagates, so a 500 always means "worth retrying".
+    failure propagates; the route turns it into a 500 when `retryable`.
     """
     if not isinstance(payload, dict):
         log.warning("webhook body is not a JSON object — ignoring")
@@ -319,6 +332,20 @@ def handle_event(payload: Any, credo: CredoClient) -> dict:
             # which the next version event corrects.
             MODEL_VERSIONS.pop(model_name, None)
         known = MODEL_VERSIONS.get(model_name)
+        # A webhook scoped to one model never receives REGISTERED_MODEL_CREATED,
+        # so there a delete-and-re-register only shows up as version 1 being
+        # created again after higher versions were recorded. Version 1 is
+        # created once per model lifetime, so treat it as the restart. A very
+        # late retry of the original v1 lands here too and costs one summary
+        # rewrite that the next version event corrects.
+        if (
+            event == "MODEL_VERSION_CREATED"
+            and version_num == 1
+            and known is not None
+            and known > 1
+        ):
+            MODEL_VERSIONS.pop(model_name, None)
+            known = None
         if version_num is not None and known is not None:
             if version_num < known or (
                 version_num == known and event == "MODEL_VERSION_CREATED"
@@ -340,6 +367,19 @@ def handle_event(payload: Any, credo: CredoClient) -> dict:
         "model_name": model_name,
         "version": version,
     }
+
+
+def _name_filter(model_name: str) -> str:
+    """`search_model_versions` filter matching one model name exactly.
+
+    The filter has no documented escape for a quote inside a literal, so the
+    name is wrapped in whichever quote character it doesn't contain. A name
+    with both can't be expressed; the caller's per-model handler skips it.
+    """
+    for quote in ("'", '"'):
+        if quote not in model_name:
+            return f"name={quote}{model_name}{quote}"
+    raise ValueError("name contains both ' and \" and can't be used in a filter")
 
 
 def backfill(credo: CredoClient, workspace: WorkspaceClient) -> None:
@@ -372,7 +412,7 @@ def backfill(credo: CredoClient, workspace: WorkspaceClient) -> None:
                     (
                         v
                         for v in workspace.model_registry.search_model_versions(
-                            filter=f"name='{model_name}'"
+                            filter=_name_filter(model_name)
                         )
                         if v.version
                     ),
@@ -476,8 +516,13 @@ def create_app() -> FastAPI:
                 handle_event, payload, request.app.state.credo
             )
         except CredoApiError as exc:
-            # 500 so Databricks can retry — the model genuinely didn't sync.
             log.error("failed to upsert Credo AI model: %s", exc)
+            if not exc.retryable:
+                # Acknowledge so Databricks stops redelivering an event that
+                # will be rejected every time. The startup backfill picks the
+                # model up once the cause (missing source, name clash) is fixed.
+                return {"ok": False, "action": "failed_not_retryable"}
+            # 500 so Databricks can retry — the model genuinely didn't sync.
             raise HTTPException(status_code=500, detail=str(exc)) from exc
         return {"ok": True, **result}
 
