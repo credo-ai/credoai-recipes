@@ -93,7 +93,7 @@ the model's summary lists the alias, and that `source` is `Databricks`.
 | `Databricks` source missing (skip Step 2)            | `422` on the first create, with the source name in the error                   |
 | Stop and restart the poller                          | `created=0`, everything `updated` — never duplicated                           |
 | Credo AI already has a same-name model, other source | Counted under `ignored … from other sources`; its summary is untouched         |
-| Default scope, stock workspace                       | Zero `system.ai.*` models reach Credo AI                                       |
+| Default scope (no catalog or schema set)             | Zero `system.ai.*` models reach Credo AI                                       |
 | `DATABRICKS_CATALOG` set, `DATABRICKS_SCHEMA` blank  | Refuses to start with a message naming both variables                          |
 | A model the token cannot read                        | Logged as `skipping <name>`, cycle continues, `failed=1`                       |
 | Credo AI returns 5xx                                 | Retried with backoff; if it still fails the watermark does not advance past it |

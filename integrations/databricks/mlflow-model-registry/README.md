@@ -259,10 +259,3 @@ registry.
 ---
 
 Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
-
----
-
-## Full guide
-
-[Databricks MLflow Model Registry Sync](https://sdk.credo.ai/cookbooks/databricks-mlflow-model-registry) —
-the narrative version of this cookbook, with the API calls and the reasoning behind each mapping.

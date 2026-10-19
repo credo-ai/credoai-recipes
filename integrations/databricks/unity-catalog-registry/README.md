@@ -136,8 +136,8 @@ it explicitly: `python setup_credo_source.py --base-host https://your-admin-host
 
 By default the poller syncs the **whole metastore, minus the `system` and `__databricks_internal`
 catalogs**. That exclusion matters more than it sounds: `system.ai` holds Databricks' own built-in
-foundation models, and on a stock workspace that is **94 of 96** registered models. Syncing them
-would bury your real models under ninety-odd records nobody governs.
+foundation models, which can outnumber your own models many times over. Syncing them would bury
+your real models under dozens of records nobody governs.
 
 To narrow further, set both of these in `.env`:
 
@@ -246,10 +246,3 @@ full sweep as the guarantee and the watermark as an optimization.
 ---
 
 Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
-
----
-
-## Full guide
-
-[Databricks Unity Catalog Registry Sync](https://sdk.credo.ai/cookbooks/databricks-unity-catalog-registry) —
-the narrative version of this cookbook, with the API calls and the reasoning behind each mapping.

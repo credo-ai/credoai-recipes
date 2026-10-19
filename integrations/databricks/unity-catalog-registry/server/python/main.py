@@ -50,9 +50,9 @@ SOURCE = "Databricks"
 # here -- this poller never touches them directly.
 
 # A metastore-wide list returns Databricks' own built-in foundation models,
-# and there are a lot of them: on a stock workspace 94 of 96 registered models
-# were `system.ai.*`. Syncing those would bury a tenant's real models under
-# ~94 records nobody governs, so the system catalogs are skipped by default.
+# and there are a lot of them: they can outnumber a workspace's own models many
+# times over. Syncing those would bury a tenant's real models under dozens of
+# records nobody governs, so the system catalogs are skipped by default.
 EXCLUDED_CATALOGS = {"system", "__databricks_internal"}
 
 # Optional narrowing. The UC API rejects a catalog without a schema
@@ -67,8 +67,8 @@ if bool(DATABRICKS_CATALOG) != bool(DATABRICKS_SCHEMA):
     )
 
 # ---- Tuning -----------------------------------------------------------
-# Longer than the Splunk poller's 60s on purpose: a cycle costs at least two
-# Unity Catalog calls per *changed* model, and UC rate-limits per account
+# Deliberately long: a cycle costs at least two Unity Catalog calls per
+# *changed* model, and UC rate-limits per account
 # (REQUEST_LIMIT_EXCEEDED / UC_REQUEST_LIMIT_EXCEEDED).
 POLL_INTERVAL_SECONDS = int(os.environ.get("POLL_INTERVAL_SECONDS", "300"))
 
