@@ -60,23 +60,29 @@ already has and matches on name, which is what makes the backfill safe to re-run
 | A **legacy** Workspace Model Registry | Databricks workspace → Models. If the page sends you to Unity Catalog, this cookbook does not apply |
 | Credo AI API key                      | Credo AI Governance App → Settings → Integrations                                                   |
 | Credo AI tenant name                  | The subdomain of your Credo AI URL                                                                  |
-| Integration Service base URL          | Credo AI Governance App → Settings → Integrations                                                   |
-| Backend base URL                      | Ask your Credo AI representative — needed once, to create the source                                |
 | Databricks host + PAT                 | Databricks workspace → Settings → Developer → Access tokens                                         |
 | A public HTTPS URL                    | [ngrok](https://ngrok.com) for local testing, or your own ingress                                   |
-| Python 3.9+                           | Any environment that can reach both Databricks and Credo AI                                         |
+| Python 3.10+                          | Any environment that can reach both Databricks and Credo AI                                         |
 
 ---
 
 ## Step 1: Set your credentials
 
+From the **cookbook root** — the directory holding this README:
+
 ```bash
+cd integrations/databricks/mlflow-model-registry
 cp .env.example .env
+# Edit .env — CREDO_API_KEY, CREDO_TENANT, DATABRICKS_HOST, DATABRICKS_TOKEN,
+# DATABRICKS_WEBHOOK_SECRET, PUBLIC_BASE_URL
 ```
 
-Fill in the Credo AI and Databricks values. `DATABRICKS_HOST` and `DATABRICKS_TOKEN` are read by
-the Databricks SDK's unified auth, so a configured CLI profile or an OAuth service principal works
-instead of a PAT if you prefer.
+`.env` belongs here, not in `server/python`. The server and its scripts look for it at the cookbook
+root no matter which directory you run them from. The Credo AI URLs in `.env.example` already point
+at `https://api.credo.ai`; the tenant is set by `CREDO_TENANT`, not by the URL.
+
+`DATABRICKS_HOST` and `DATABRICKS_TOKEN` are read by the Databricks SDK's unified auth, so a
+configured CLI profile or an OAuth service principal works instead of a PAT if you prefer.
 
 ---
 
@@ -88,12 +94,26 @@ has been run once.
 
 ```bash
 cd server/python
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+
 python setup_credo_source.py
 ```
 
+> **Use a virtualenv.** Without one, `pip` and `python` can resolve to different interpreters and the
+> install lands somewhere the server cannot see — the failure looks like
+> `ModuleNotFoundError: No module named 'dotenv'` straight after a successful install.
+>
+> On Debian and Ubuntu, `python3 -m venv` can produce a virtualenv with no `pip` inside. If that
+> happens, either `sudo apt install python3-venv` or use [uv](https://docs.astral.sh/uv/):
+> `uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt`.
+
 Expected: `Created source 'Databricks': <id>`, or `Source 'Databricks' already exists: <id>` on a
 re-run. It is idempotent.
+
+If your Credo AI deployment serves the private API from a different host than `api.credo.ai`, pass
+it explicitly: `python setup_credo_source.py --base-host https://your-admin-host`.
 
 ---
 
@@ -106,13 +126,15 @@ python main.py
 On startup it lists the models Credo AI already has, then backfills the Databricks registry:
 
 ```text
-INFO [databricks-bridge] seeded 12 existing Credo AI model(s)
+INFO [databricks-bridge] seeded 35 existing Credo AI model(s); ignored 2 from other sources
 INFO [databricks-bridge] backfill: registry=42 created=7 updated=35 failed=0
 ```
 
-Restart it and `created` drops to `0` — everything is already there and gets updated instead. Run
-it as a systemd service, a container, or a scheduled task. In a container, set `HOST=0.0.0.0`;
-the default binds to localhost so you have to put a tunnel or ingress in front of it deliberately.
+`seeded` counts only models whose source is `Databricks`; the rest are reported as `ignored` (see
+[How it matches records](#how-it-matches-records)). Restart it and `created` drops to `0` —
+everything is already there and gets updated instead. Run it as a systemd service, a container, or
+a scheduled task. In a container, set `HOST=0.0.0.0`; the default binds to localhost so you have to
+put a tunnel or ingress in front of it deliberately.
 
 ---
 
@@ -156,7 +178,7 @@ Send it again and `action` becomes `updated` — that is the no-duplicates behav
 
 ---
 
-## Step 6: Field mapping
+## Field mapping
 
 | Credo AI Field | Databricks Source                    | Notes                                                                         |
 | -------------- | ------------------------------------ | ----------------------------------------------------------------------------- |
@@ -183,6 +205,48 @@ data fails quietly — don't.
 | Duplicate models in Credo AI                     | The model was renamed in Databricks                     | Models match by name only; merge them in Credo AI                                             |
 | A new model doesn't sync until its first version | The webhook is scoped via `DATABRICKS_MODEL_NAME`       | Leave it blank so `REGISTERED_MODEL_CREATED` is included                                      |
 | `401` after startup                              | Wrong `CREDO_API_KEY` or `CREDO_TENANT`                 | The token is refreshed once, then gives up — check both values                                |
+| A model is skipped and `failed` increments       | A model with that name exists under another source      | See [Limitations](#limitations); rename one of the two or merge them in Credo AI              |
+
+---
+
+## How it matches records
+
+**By name, from an upfront listing.** There's no server-side filter-by-name, so at startup the
+server pages through the Credo AI model registry once and builds a name → id map. A name in that
+map is patched (`summary` only); a name that isn't gets a `POST /models`. That one listing is what
+makes the backfill safe to re-run on every restart.
+
+**Only models whose source is `Databricks` are matched.** A model another source already owns under
+the same name is left alone, so its summary isn't overwritten. It is counted as `ignored … from
+other sources` in the startup log.
+
+**A model deleted in Credo AI is recreated.** If a patch returns `404` for an id the server cached,
+it forgets the id and creates the model again on the same event, instead of failing every later one.
+
+**Stale deliveries are dropped.** The server remembers the highest version it has written per model
+name. A webhook for a lower version, or a repeat of the same one, is acknowledged with `200` and
+`"action":"ignored_stale_event"` and the summary is left as it was. A `REGISTERED_MODEL_CREATED` for
+a name that already has recorded versions is treated as delete-and-re-register in Databricks, which
+restarts version numbering at 1, so that mark is reset. The mark is held in memory; the startup
+backfill rebuilds it from the registry.
+
+---
+
+## Limitations
+
+- **Nothing is ever deleted.** A model removed from Databricks stays in Credo AI. A governance
+  record should outlive the deployment it describes — but it means Credo AI is a superset of
+  Databricks, not a mirror.
+- **A rename creates a second record**, because matching is by name.
+- **A same-name model from another source is never adopted.** Credo AI model names are unique, so
+  the create for that name is expected to be rejected, and shows up as `failed` in the backfill (or
+  as a logged error for a webhook delivery).
+- **Only the latest version and stage are recorded**, as text in `summary`. Credo AI has no field
+  for version history, run ids or metrics.
+- **Legacy Workspace Model Registry only.** Models in Unity Catalog emit no registry webhooks, so
+  they are never seen — use the [Unity Catalog cookbook](../unity-catalog-registry).
+
+---
 
 Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
 
@@ -190,4 +254,5 @@ Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
 
 ## Full guide
 
-Not yet published — pending Cookbook Validation Process sign-off.
+[Databricks MLflow Model Registry Sync](https://sdk.credo.ai/cookbooks/databricks-mlflow-model-registry) —
+the narrative version of this cookbook, with the API calls and the reasoning behind each mapping.

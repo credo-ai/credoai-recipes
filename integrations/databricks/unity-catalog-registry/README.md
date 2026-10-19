@@ -83,7 +83,6 @@ For most governance workflows, a five-minute poll is well inside the useful wind
 | -------------------------------- | ------------------------------------------------------------------------------ |
 | Credo AI API key                 | Credo AI Governance App → Settings → Integrations                              |
 | Credo AI tenant name             | The subdomain you sign in at                                                   |
-| Credo AI backend URL             | Ask your Credo AI representative (used once, in Step 2)                        |
 | Databricks workspace URL         | The host you sign in at, e.g. `https://dbc-1234abcd-5678.cloud.databricks.com` |
 | Databricks personal access token | Databricks → Settings → Developer → Access tokens                              |
 | Unity Catalog read access        | `USE CATALOG`, `USE SCHEMA`, and `EXECUTE` on the models you want synced       |
@@ -91,14 +90,18 @@ For most governance workflows, a five-minute poll is well inside the useful wind
 
 ## Step 1: Set your credentials
 
+From the **cookbook root** — the directory holding this README:
+
 ```bash
-cd server/python
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp ../../.env.example ../../.env
+cd integrations/databricks/unity-catalog-registry
+cp .env.example .env
+# Edit .env — CREDO_API_KEY, CREDO_TENANT, DATABRICKS_HOST, DATABRICKS_TOKEN
 ```
 
-Fill in `.env`. It is gitignored — never commit it.
+`.env` belongs here, not in `server/python`. The poller and its scripts look for it at the cookbook
+root no matter which directory you run them from, so a scheduled job does not depend on where it
+starts. It is gitignored — never commit it. The Credo AI URLs in `.env.example` already point at
+`https://api.credo.ai`; the tenant is set by `CREDO_TENANT`, not by the URL.
 
 ## Step 2: Create the `Databricks` source — one time per tenant
 
@@ -106,12 +109,28 @@ Fill in `.env`. It is gitignored — never commit it.
 first, so without this every model create returns **422**.
 
 ```bash
+cd server/python
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+
 python setup_credo_source.py
 ```
+
+> **Use a virtualenv.** Without one, `pip` and `python` can resolve to different interpreters and the
+> install lands somewhere the poller cannot see — the failure looks like
+> `ModuleNotFoundError: No module named 'dotenv'` straight after a successful install.
+>
+> On Debian and Ubuntu, `python3 -m venv` can produce a virtualenv with no `pip` inside. If that
+> happens, either `sudo apt install python3-venv` or use [uv](https://docs.astral.sh/uv/):
+> `uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt`.
 
 Idempotent — safe to re-run, and it prints whether it created the source or found it already there.
 If you already ran this for the [MLflow Model Registry cookbook](../mlflow-model-registry), it is
 done; both use the same `Databricks` source.
+
+If your Credo AI deployment serves the private API from a different host than `api.credo.ai`, pass
+it explicitly: `python setup_credo_source.py --base-host https://your-admin-host`.
 
 ## Step 3: Choose what to sync
 
@@ -140,10 +159,13 @@ python main.py
 You should see a full sweep on the first cycle, then quiet cycles:
 
 ```text
-seeded 23 existing Credo AI model(s)
+seeded 23 existing Credo AI model(s); ignored 2 from other sources
 cycle: scanned=3 changed=3 created=2 updated=1 failed=0 full_sweep=True
 cycle: scanned=3 changed=0 created=0 updated=0 failed=0 full_sweep=False
 ```
+
+`seeded` counts only models whose source is `Databricks`; the rest are reported as `ignored` (see
+[How it matches records](#how-it-matches-records)).
 
 There is no port to expose and nothing to tunnel — this is not a webhook receiver, it is a
 long-running process that reaches out to both Databricks and Credo AI. Run it as a systemd service,
@@ -152,13 +174,13 @@ a container, or a scheduled task, whatever fits how you run long-lived internal 
 Restarting is safe. The poller seeds itself from what Credo AI already has, so a restart re-syncs
 rather than duplicating — there is no state file to lose.
 
-## Step 5: Field mapping
+## Field mapping
 
 | Credo AI Field | Unity Catalog Source                 | Notes                                                                                                |
 | -------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | `name`         | `full_name`                          | Fully qualified `catalog.schema.model` — UC names are only unique within a schema                    |
 | `summary`      | latest version number + aliases      | Composed string, e.g. `Databricks Unity Catalog model, version 8. Aliases: champion=8.`              |
-| `source`       | constant `Databricks`                | Set on create only; an existing Credo AI model keeps whatever source it already had                  |
+| `source`       | constant `Databricks`                | Set on create only. Only models already sourced `Databricks` are matched and updated                 |
 | —              | `version`, `run_id`, `model_metrics` | **Nowhere to go.** A Credo AI Model has no version concept, so these live in `summary` or not at all |
 
 Unity Catalog replaced the legacy registry's **stages** with **aliases**, so there is no
@@ -167,15 +189,61 @@ equivalent.
 
 ## Troubleshooting
 
-| Symptom                                                     | Likely Cause                                                                 | Fix                                                                               |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `422` on model create                                       | The `Databricks` source does not exist                                       | Run Step 2                                                                        |
-| `429 REQUEST_LIMIT_EXCEEDED` / `UC_REQUEST_LIMIT_EXCEEDED`  | Too many Unity Catalog calls                                                 | Raise `POLL_INTERVAL_SECONDS` and `REQUEST_DELAY_SECONDS`, or scope to one schema |
-| Tenant filled with `system.ai.*` models                     | `DATABRICKS_CATALOG` was pointed at `system`                                 | Clear both scope vars; the default exclusion only applies metastore-wide          |
-| `DATABRICKS_CATALOG and DATABRICKS_SCHEMA must both be set` | Only one of the pair is filled in                                            | Set both, or leave both blank                                                     |
-| A model's edited version comment never syncs                | Editing a _version's_ metadata does not bump the parent model's `updated_at` | Wait for the next full sweep, or lower `FULL_SWEEP_EVERY_N_CYCLES`                |
-| Nothing syncs, no error                                     | The token lacks `USE CATALOG` / `USE SCHEMA`                                 | UC silently omits models you cannot browse — check grants                         |
-| A model exists in Credo AI with the wrong `source`          | It was created by something else before this poller ran                      | Expected: the poller only patches `summary` on models it did not create           |
+| Symptom                                                     | Likely Cause                                                                      | Fix                                                                               |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `422` on model create                                       | The `Databricks` source does not exist                                            | Run Step 2                                                                        |
+| `429 REQUEST_LIMIT_EXCEEDED` / `UC_REQUEST_LIMIT_EXCEEDED`  | Too many Unity Catalog calls                                                      | Raise `POLL_INTERVAL_SECONDS` and `REQUEST_DELAY_SECONDS`, or scope to one schema |
+| Tenant filled with `system.ai.*` models                     | `DATABRICKS_CATALOG` was pointed at `system`                                      | Clear both scope vars; the default exclusion only applies metastore-wide          |
+| `DATABRICKS_CATALOG and DATABRICKS_SCHEMA must both be set` | Only one of the pair is filled in                                                 | Set both, or leave both blank                                                     |
+| A model's edited version comment never syncs                | Editing a _version's_ metadata was not observed to bump the parent's `updated_at` | Wait for the next full sweep, or lower `FULL_SWEEP_EVERY_N_CYCLES`                |
+| Nothing syncs, no error                                     | The token lacks `USE CATALOG` / `USE SCHEMA`                                      | UC silently omits models you cannot browse — check grants                         |
+| A model exists in Credo AI with the wrong `source`          | It was created by something else before this poller ran                           | It is never matched or updated — see [Limitations](#limitations)                  |
+| A model is skipped and `failed` increments                  | A model with that name exists under another source                                | Rename one of the two, or merge them in Credo AI                                  |
+
+---
+
+## How it matches records
+
+**By fully qualified name, from an upfront listing.** There's no server-side filter-by-name, so at
+startup the poller pages through the Credo AI model registry once and builds a name → id map. A name
+in that map is patched (`summary` only); a name that isn't gets a `POST /models`. That one listing
+is what makes a restart safe, with no state file.
+
+**Only models whose source is `Databricks` are matched.** A model another source already owns under
+the same name is left alone, so its summary isn't overwritten. It is counted as `ignored … from
+other sources` in the startup log.
+
+**A model deleted in Credo AI is recreated.** If a patch returns `404` for an id the poller cached,
+it forgets the id and creates the model again, instead of failing every later cycle.
+
+**Changes are detected by comparing `updated_at` to an in-memory watermark.** The first cycle after
+a start, and every `FULL_SWEEP_EVERY_N_CYCLES`th cycle, ignore the watermark and sync every model.
+The watermark never advances past a model whose sync failed, so the next cycle retries it; after
+repeated failures a model is retried on full sweeps only.
+
+**What bumps `updated_at` is observed, not documented.** In testing, creating a version, setting an
+alias and editing model-level metadata bumped the registered model's `updated_at`, and editing a
+_version's_ comment did not. Databricks does not document this as a contract, so treat the
+full sweep as the guarantee and the watermark as an optimization.
+
+---
+
+## Limitations
+
+- **Nothing is ever deleted.** A model removed from Unity Catalog stays in Credo AI. A governance
+  record should outlive the deployment it describes — but it means Credo AI is a superset of
+  Databricks, not a mirror.
+- **A rename, or a move to another schema or catalog, creates a second record**, because matching is
+  by fully qualified name.
+- **A same-name model from another source is never adopted.** Credo AI model names are unique, so
+  the create for that name is expected to be rejected and shows up as `failed` in the cycle line.
+- **Changes the watermark cannot see wait for a full sweep.** At the defaults (`300` seconds, every
+  `20`th cycle) that is up to about 100 minutes.
+- **Only the latest version number and aliases are recorded**, as text in `summary`. Credo AI has no
+  field for version history, run ids or metrics.
+- **Polling, not events.** A change shows up on the next cycle, up to `POLL_INTERVAL_SECONDS` later.
+
+---
 
 Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
 
@@ -183,4 +251,5 @@ Still stuck? Slack: `#credo-ai-integrations` | Support: support.credo.ai
 
 ## Full guide
 
-Not yet published — pending Cookbook Validation Process sign-off.
+[Databricks Unity Catalog Registry Sync](https://sdk.credo.ai/cookbooks/databricks-unity-catalog-registry) —
+the narrative version of this cookbook, with the API calls and the reasoning behind each mapping.

@@ -14,6 +14,7 @@ Each recipe is self-contained — clone, configure, and run.
 | [ServiceNow](./servicenow/use-case-creation)                          | Use Case Intake           | Native Integration (runs inside ServiceNow, no server) | ✅ Available                                        |
 | [Splunk](./splunk/shadow-ai-event-ingestion)                          | Shadow AI Event Ingestion | Cookbook (run your own poller, no inbound webhook)     | 🧪 Preview — talks to a backend API directly        |
 | [AWS Bedrock](./aws-bedrock/ai-inventory-sync)                        | AI Inventory Sync         | Cookbook (run your own scheduled job, no server)       | ✅ Available                                        |
+| [Azure AI Foundry](./azure-ai-foundry/ai-governance-sync)             | AI Governance Sync        | Cookbook (run your own scheduled job, no server)       | ✅ Available                                        |
 | [Email](./email/governance-notifications)                             | Governance Notifications  | Cookbook (run your own server)                         | 🧪 Preview — model-added emails                     |
 | [Databricks (Workspace Registry)](./databricks/mlflow-model-registry) | Model Registry Sync       | Cookbook (run your own server, inbound webhook)        | 🧪 Preview — legacy Workspace Model Registry only   |
 | [Databricks (Unity Catalog)](./databricks/unity-catalog-registry)     | Model Registry Sync       | Cookbook (run your own poller, no inbound webhook)     | 🧪 Preview — polling; Unity Catalog has no webhooks |

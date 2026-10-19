@@ -1,9 +1,10 @@
 # Testing — Databricks MLflow Model Registry Sync
 
-> Steps 1–3 need no Databricks workspace and no Credo AI entitlement beyond a normal API key.
-> Steps 4–6 need a sandbox Credo AI tenant. Step 7 needs a Databricks workspace with a **legacy**
-> Workspace Model Registry — if your workspace only offers Unity Catalog, you cannot test the
-> webhook path at all, because Databricks does not emit registry webhooks for UC models.
+Work through these in order. Step 1 touches Databricks only and Step 3 needs no Databricks
+workspace at all. Steps 2–4 write to a Credo AI tenant — use a **sandbox tenant only**. Steps 1 and
+4 need a **legacy** Workspace Model Registry — if your workspace only offers Unity Catalog, you
+cannot test the webhook path at all, because Databricks does not emit registry webhooks for UC
+models.
 
 ---
 
@@ -11,9 +12,11 @@
 
 ```bash
 cd server/python
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -c "
 from databricks.sdk import WorkspaceClient
+from dotenv import load_dotenv; load_dotenv('../../.env')
 for m in WorkspaceClient().model_registry.list_models():
     print(m.name, [v.version for v in (m.latest_versions or [])])
 "
@@ -66,7 +69,7 @@ Expected: `200`. Drop the header and expect `403`.
 Start `python main.py` and read the startup lines:
 
 ```text
-INFO [databricks-bridge] seeded N existing Credo AI model(s)
+INFO [databricks-bridge] seeded N existing Credo AI model(s); ignored N from other sources
 INFO [databricks-bridge] backfill: registry=N created=N updated=0 failed=0
 ```
 
@@ -92,6 +95,7 @@ In the Credo AI Governance App, open the model registry and confirm:
 | --------------------------------------------------------------- | ------------------------------------------------------------------------ |
 | `Databricks` source not created yet                             | Model create fails with `422`; the error names the failing call          |
 | Restart the server                                              | Backfill reports `created=0`; no duplicate models appear                 |
+| Credo AI already has a same-name model from another source      | Counted under `ignored … from other sources`; its summary is untouched   |
 | Missing or wrong `X-Databricks-Signature`                       | `403`, nothing written to Credo AI                                       |
 | Unhandled event (`COMMENT_CREATED`)                             | `200` with `"action":"ignored_event_type"` — not an error, not a retry   |
 | Event with no `model_name`                                      | `200` with `"action":"ignored_missing_model_name"`                       |
@@ -107,6 +111,6 @@ In the Credo AI Governance App, open the model registry and confirm:
 
 ## Cold-setup test
 
-Hand this directory to someone with no Credo AI context. Time them from `git clone` to a model
-appearing in Credo AI, and log every point where they had to ask a question. Target: under the
-Quick Start estimate, with no help. That log feeds the validation report.
+Hand this cookbook to someone on your team who has never seen it. Time how long it takes them to
+get from `git clone` to a model appearing in Credo AI, using only `README.md` and this file. Log
+every point of confusion.

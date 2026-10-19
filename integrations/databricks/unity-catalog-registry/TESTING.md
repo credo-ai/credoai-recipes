@@ -1,14 +1,18 @@
 # Testing — Databricks Unity Catalog Registry Sync
 
-> Steps 1–2 need a Databricks workspace but touch nothing in Credo AI. Step 3 needs no Databricks
-> workspace at all. Steps 4–6 write to a Credo AI tenant — use a **sandbox tenant only**. Models
-> synced into Credo AI cannot be deleted through the Integration API, so never point a first run at
-> production.
+Work through these in order. Step 1 needs a Databricks workspace but touches nothing in Credo AI.
+Step 2 creates a Source record in your Credo AI tenant. Step 3 reads Databricks only. Steps 4–6
+write to a Credo AI tenant — use a **sandbox tenant only**. Models synced into Credo AI cannot be
+deleted through the Integration API, so never point a first run at production.
+
+---
 
 ## Step 1: Confirm Unity Catalog access, no Credo AI involved
 
 ```bash
 cd server/python
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 python -c "
 from databricks.sdk import WorkspaceClient
 from dotenv import load_dotenv; load_dotenv('../../.env')
@@ -61,7 +65,7 @@ python main.py
 Expected first cycle:
 
 ```text
-seeded N existing Credo AI model(s)
+seeded N existing Credo AI model(s); ignored N from other sources
 cycle: scanned=3 changed=3 created=2 updated=1 failed=0 full_sweep=True
 ```
 
@@ -84,20 +88,22 @@ the model's summary lists the alias, and that `source` is `Databricks`.
 
 ## Step 6: Failure-mode checks
 
-| Scenario                                            | Expected behavior                                                              |
-| --------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `Databricks` source missing (skip Step 2)           | `422` on the first create, with the source name in the error                   |
-| Stop and restart the poller                         | `created=0`, everything `updated` — never duplicated                           |
-| Default scope, stock workspace                      | Zero `system.ai.*` models reach Credo AI                                       |
-| `DATABRICKS_CATALOG` set, `DATABRICKS_SCHEMA` blank | Refuses to start with a message naming both variables                          |
-| A model the token cannot read                       | Logged as `skipping <name>`, cycle continues, `failed=1`                       |
-| Credo AI returns 5xx                                | Retried with backoff; if it still fails the watermark does not advance past it |
-| Edit a _version's_ comment                          | Not picked up by the watermark — appears on the next `full_sweep=True` cycle   |
-| New model version registered                        | Picked up on the next cycle; the parent model's `updated_at` bumps             |
+| Scenario                                             | Expected behavior                                                              |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `Databricks` source missing (skip Step 2)            | `422` on the first create, with the source name in the error                   |
+| Stop and restart the poller                          | `created=0`, everything `updated` — never duplicated                           |
+| Credo AI already has a same-name model, other source | Counted under `ignored … from other sources`; its summary is untouched         |
+| Default scope, stock workspace                       | Zero `system.ai.*` models reach Credo AI                                       |
+| `DATABRICKS_CATALOG` set, `DATABRICKS_SCHEMA` blank  | Refuses to start with a message naming both variables                          |
+| A model the token cannot read                        | Logged as `skipping <name>`, cycle continues, `failed=1`                       |
+| Credo AI returns 5xx                                 | Retried with backoff; if it still fails the watermark does not advance past it |
+| Edit a _version's_ comment                           | Not picked up by the watermark — appears on the next `full_sweep=True` cycle   |
+| New model version registered                         | Picked up on the next cycle; the parent model's `updated_at` bumps             |
 
 That last pair is the one worth understanding: creating a version, setting an alias, and editing
-model-level metadata all bump the registered model's `updated_at`, so the watermark catches them.
-Editing a _version's_ comment or tags does not. `FULL_SWEEP_EVERY_N_CYCLES` exists for that gap.
+model-level metadata were observed to bump the registered model's `updated_at`, so the watermark
+catches them. Editing a _version's_ comment was observed not to. Databricks does not document this,
+and `FULL_SWEEP_EVERY_N_CYCLES` exists for that gap.
 
 ## Cold-setup test
 
