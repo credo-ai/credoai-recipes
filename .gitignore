@@ -5,6 +5,9 @@
 .env
 .local.env
 
+# data-migration recipe output
+migration_result.json
+
 node_modules/
 
 .secrets.baseline.bak
