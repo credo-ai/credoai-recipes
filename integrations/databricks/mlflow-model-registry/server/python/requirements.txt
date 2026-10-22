@@ -2,6 +2,6 @@ fastapi==0.111.0
 uvicorn==0.30.1
 httpx==0.27.0
 python-dotenv==1.0.1
-# Databricks pins the SDK to a minor version during Beta; it covers both the
+# Databricks recommends pinning the exact SDK version while it is Beta; it covers both the
 # registry webhook CRUD and the registry reads the startup backfill needs.
 databricks-sdk==0.139.0

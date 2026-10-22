@@ -24,7 +24,7 @@ for m in models[:10]:
 "
 ```
 
-If this returns nothing, the token lacks `USE CATALOG` / `USE SCHEMA` — Unity Catalog omits models
+If this returns nothing, the token lacks `USE CATALOG` / `USE SCHEMA` / `EXECUTE` — Unity Catalog omits models
 you cannot browse rather than erroring.
 
 Expect the list to be dominated by `system.ai.*` entries. That is normal, and it is exactly what the

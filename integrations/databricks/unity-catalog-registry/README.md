@@ -72,7 +72,7 @@ them in Unity Catalog as model event job triggers."_ It fires `MODEL_CREATED`,
 model, a schema, or the whole metastore.
 
 **This cookbook deliberately does not ship one.** Model update triggers are Beta, capped at 100 per
-workspace, and require a job plus a notebook task to forward the event — a moving target to pin a
+workspace, and need a job whose task forwards the event — a moving target to pin a
 public cookbook to. If you want sub-minute latency, create a trigger whose job POSTs the injected
 parameters to a service of your own, and keep this poller running alongside it for reconciliation.
 For most governance workflows, a five-minute poll is well inside the useful window.
@@ -196,7 +196,7 @@ equivalent.
 | Tenant filled with `system.ai.*` models                     | `DATABRICKS_CATALOG` was pointed at `system`                                      | Clear both scope vars; the default exclusion only applies metastore-wide          |
 | `DATABRICKS_CATALOG and DATABRICKS_SCHEMA must both be set` | Only one of the pair is filled in                                                 | Set both, or leave both blank                                                     |
 | A model's edited version comment never syncs                | Editing a _version's_ metadata was not observed to bump the parent's `updated_at` | Wait for the next full sweep, or lower `FULL_SWEEP_EVERY_N_CYCLES`                |
-| Nothing syncs, no error                                     | The token lacks `USE CATALOG` / `USE SCHEMA`                                      | UC silently omits models you cannot browse — check grants                         |
+| Nothing syncs, no error                                     | The token lacks `USE CATALOG` / `USE SCHEMA` / `EXECUTE`                          | UC silently omits models you cannot browse — check grants                         |
 | A model exists in Credo AI with the wrong `source`          | It was created by something else before this poller ran                           | It is never matched or updated — see [Limitations](#limitations)                  |
 | A model is skipped and `failed` increments                  | A model with that name exists under another source                                | Rename one of the two, or merge them in Credo AI                                  |
 
