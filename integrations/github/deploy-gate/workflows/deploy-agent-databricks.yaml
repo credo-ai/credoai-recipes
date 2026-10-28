@@ -1,0 +1,28 @@
+name: Deploy Agent (Databricks)
+
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches:
+    - deploy-gate-develop
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: deploy-agent
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      run: pip install 'mlflow[databricks]' databricks-langchain databricks-sdk langgraph
+
+    - name: Log, register, and deploy agent
+      env:
+        DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+        DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+        DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+      run: python scripts/deploy_agent.py

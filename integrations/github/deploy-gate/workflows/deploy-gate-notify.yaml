@@ -1,0 +1,80 @@
+# Arms the deploy gate on every PR targeting the gate branch:
+#   1. posts commit status deploy-gate/approval=pending on the head SHA
+#   2. notifies the github-gate service so it creates a Credo AI use case
+#
+# Install into .github/workflows/ of your repo (default branch).
+# Requires the repo Actions variable GATE_SERVICE_URL (the gate service's public
+# URL) and, optionally, the secret GATE_SHARED_SECRET.
+
+name: Deploy Gate (notify)
+
+on:  # yamllint disable-line rule:truthy
+  pull_request:
+    branches:
+    - deploy-gate-develop
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  arm-gate-and-notify:
+    name: arm-gate-and-notify
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set deploy-gate/approval status to pending
+      env:
+        GH_TOKEN: ${{ github.token }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        gh api "repos/${{ github.repository }}/statuses/${HEAD_SHA}" \
+          -f state=pending \
+          -f context=deploy-gate/approval \
+          -f description='Awaiting Credo AI use-case review approval' \
+          -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        echo "Gate set to pending on ${HEAD_SHA}"
+
+    # The deployed model name lives only in scripts/deploy_agent.py; read it
+    # from there (AST parse, no import/exec) so the payload can't drift.
+    - name: Read registered_model_name from deploy_agent.py
+      id: model
+      run: |
+        name=$(python3 - <<'PY'
+        import ast
+        src = open("scripts/deploy_agent.py").read()
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, ast.keyword) and node.arg == "registered_model_name":
+                print(node.value.value)
+                break
+        PY
+        )
+        if [ -z "$name" ]; then
+          echo "registered_model_name not found in scripts/deploy_agent.py" >&2
+          exit 1
+        fi
+        echo "name=$name" >> "$GITHUB_OUTPUT"
+        echo "Resolved registered_model_name=$name"
+
+    - name: Notify github-gate service
+      env:
+        GATE_URL: ${{ vars.GATE_SERVICE_URL }}
+        GATE_SECRET: ${{ secrets.GATE_SHARED_SECRET }}
+        # PR title goes through an env var + jq (never interpolated into the
+        # script) so a crafted title can't inject shell or JSON.
+        PR_TITLE: ${{ github.event.pull_request.title }}
+      run: |
+        jq -n \
+          --arg repo "${{ github.repository }}" \
+          --argjson pr_number ${{ github.event.pull_request.number }} \
+          --arg pr_title "$PR_TITLE" \
+          --arg head_sha "${{ github.event.pull_request.head.sha }}" \
+          --arg html_url "${{ github.event.pull_request.html_url }}" \
+          --arg model_name "${{ steps.model.outputs.name }}" \
+          '{repo: $repo, pr_number: $pr_number, pr_title: $pr_title,
+            head_sha: $head_sha, html_url: $html_url, model_name: $model_name}' \
+        | curl -fsS -X POST "${GATE_URL}/gate/notify" \
+            -H 'Content-Type: application/json' \
+            ${GATE_SECRET:+-H "X-Gate-Secret: ${GATE_SECRET}"} \
+            -d @-
