@@ -28,7 +28,7 @@ jobs:
       working-directory: integrations/web-components/embeddable-use-case-forms/server/python
       run: |
         uv venv --no-managed-python --no-python-downloads
-        uv pip install --link-mode=copy -r requirements-dev.txt
+        uv pip install --python .venv/bin/python --link-mode=copy -r requirements-dev.txt
     - name: Test token service
       working-directory: integrations/web-components/embeddable-use-case-forms/server/python
       run: .venv/bin/python -m pytest -q
