@@ -1,0 +1,45 @@
+{
+  "data": [
+    {
+      "id": "ev-1",
+      "type": "evidences",
+      "attributes": {
+        "label": { "key": "q-product" },
+        "data": { "value": "Beta Suite" }
+      }
+    },
+    {
+      "id": "ev-2",
+      "type": "evidences",
+      "attributes": {
+        "label": { "key": "q-desc" },
+        "data": { "value": "Summarizes support tickets." }
+      }
+    },
+    {
+      "id": "ev-2-dup",
+      "type": "evidences",
+      "attributes": {
+        "label": { "key": "q-desc" },
+        "data": { "value": "Summarizes and drafts replies to support tickets." }
+      }
+    },
+    {
+      "id": "ev-3",
+      "type": "evidences",
+      "attributes": {
+        "label": { "key": "q-sources" },
+        "data": { "value": ["Public", "Customer"] }
+      }
+    },
+    {
+      "id": "ev-other-questionnaire",
+      "type": "evidences",
+      "attributes": {
+        "label": { "key": "q-not-in-questionnaire" },
+        "data": { "value": "ignore me" }
+      }
+    }
+  ],
+  "meta": {}
+}

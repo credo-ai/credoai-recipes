@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>credo-ai-use-case-intake-form — host page</title>
+    <script src="/config.js"></script>
+    <style>
+      body { margin: 0; padding: 2.5rem 1rem; background: #f3f4f6;
+             font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+      .host { max-width: 820px; margin: 0 auto; }
+      .host header { margin-bottom: 1.5rem; }
+      .host h1 { font-size: 1.25rem; margin: 0 0 0.25rem; color: #111827; }
+      .host p { margin: 0; color: #6b7280; }
+    </style>
+  </head>
+  <body>
+    <div class="host">
+      <header>
+        <h1>AI Use Case Registration</h1>
+        <p>Register a use case against a fixed questionnaire — every question shown up front.</p>
+      </header>
+      <credo-ai-use-case-intake-form></credo-ai-use-case-intake-form>
+    </div>
+
+    <script type="module" src="/src/elements/use-case-intake-form.tsx"></script>
+    <script>
+      // Host-page reference implementation. Every value comes from
+      // public/config.js; the element itself reads nothing from `window`.
+      document.addEventListener('DOMContentLoaded', () => {
+        const el = document.querySelector('credo-ai-use-case-intake-form');
+        const c = window.credoConfig || {};
+
+        // The API key stays server-side: this page points the element at the
+        // local backend's token endpoint rather than handing it a key. A
+        // production host that mints tokens itself would instead set
+        // `jwt-token` and `integration-token` directly.
+        const set = (name, value) => {
+          if (value !== undefined && value !== null && value !== '') {
+            el.setAttribute(name, String(value));
+          }
+        };
+
+        set('token-endpoint', c.tokenEndpoint || 'http://localhost:8000/api/token');
+        set('api-url', c.apiUrl);
+        set('integration-service-api-url', c.integrationServiceApiUrl);
+        set('tenant', c.tenant);
+        set('user', c.user);
+        set('app-url', c.appUrl);
+        set('questionnaire-id', c.questionnaireId);
+        set('source', c.source);
+        if (c.disableQuestionnaireSelection !== undefined) {
+          el.setAttribute(
+            'disable-questionnaire-selection',
+            String(c.disableQuestionnaireSelection),
+          );
+        }
+        // Booleans are only meaningful when explicitly configured; leaving the
+        // attribute off lets the element apply its own default.
+        if (c.hideCustomFields !== undefined) {
+          el.setAttribute('hide-custom-fields', String(c.hideCustomFields));
+        }
+        if (c.allowSubmit !== undefined) {
+          el.setAttribute('allow-submit', String(c.allowSubmit));
+        }
+
+        for (const event of ['use_case_created', 'form_values_changed', 'form_state_changed', 'error']) {
+          el.addEventListener(event, (e) => console.log(`[credo-ai-use-case-intake-form] ${event}`, e.detail));
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "data": {
+    "id": "qn-2",
+    "type": "questionnaires",
+    "attributes": {
+      "name": "Vendor Risk Assessment",
+      "key": "VRA",
+      "version": 3,
+      "sections": [
+        {
+          "id": "sec-data",
+          "title": "Data Handling (Vendor)",
+          "description": "Vendor-specific data handling",
+          "questions": [
+            {
+              "id": "q-retention",
+              "question": "Data retention period",
+              "evidence_type": "short_text",
+              "multiple": false,
+              "required": false,
+              "hidden": false
+            }
+          ]
+        },
+        {
+          "id": "sec-internal-only",
+          "title": "Internal Review",
+          "questions": [
+            {
+              "id": "q-internal-doc",
+              "question": "Upload internal review doc",
+              "evidence_type": "file",
+              "hidden": false
+            },
+            {
+              "id": "q-internal-hidden",
+              "question": "Reviewer notes",
+              "evidence_type": "short_text",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "id": "sec-vendor",
+          "title": "Vendor Details",
+          "questions": [
+            {
+              "id": "q-vendor-name",
+              "question": "Vendor name",
+              "evidence_type": "short_text",
+              "multiple": false,
+              "required": true,
+              "hidden": false
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

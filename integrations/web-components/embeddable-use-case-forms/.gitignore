@@ -1,0 +1,6 @@
+.env
+web/public/config.js
+web/dist/
+web/node_modules/
+server/python/.venv/
+*.tsbuildinfo

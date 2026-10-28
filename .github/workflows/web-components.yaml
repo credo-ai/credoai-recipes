@@ -1,0 +1,46 @@
+name: Web Components
+on:
+  pull_request:
+    paths:
+    - integrations/web-components/**
+    - .tool-versions
+    - .github/workflows/web-components.yaml
+
+env:
+  FORCE_COLOR: 1
+
+permissions:
+  contents: read
+
+jobs:
+  web-components:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v7
+    - name: Install mise
+      uses: jdx/mise-action@v4
+      with:
+        install: true
+        cache: true
+    - name: Install token service dependencies
+      working-directory: integrations/web-components/embeddable-use-case-forms/server/python
+      run: |
+        uv venv --no-managed-python --no-python-downloads
+        uv pip install --link-mode=copy -r requirements-dev.txt
+    - name: Test token service
+      working-directory: integrations/web-components/embeddable-use-case-forms/server/python
+      run: .venv/bin/python -m pytest -q
+    - name: Install web dependencies
+      working-directory: integrations/web-components/embeddable-use-case-forms/web
+      run: npm ci --no-audit --no-fund
+    - name: Lint
+      working-directory: integrations/web-components/embeddable-use-case-forms/web
+      run: npm run lint
+    - name: Build bundles
+      working-directory: integrations/web-components/embeddable-use-case-forms/web
+      run: npm run build
+    - name: Test (includes the built bundles)
+      working-directory: integrations/web-components/embeddable-use-case-forms/web
+      run: npm test
