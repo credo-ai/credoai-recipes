@@ -1,0 +1,3 @@
+# Front-end-owned Credo AI config — copy public/config.example.js to
+# public/config.js locally. Never commit a real config.js.
+public/config.js

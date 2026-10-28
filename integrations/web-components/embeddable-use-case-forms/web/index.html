@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Credo AI Web Components</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 3rem 1.5rem;
+        font: 14px/1.5 ui-sans-serif, system-ui, sans-serif;
+        color: #111827;
+        background: #f3f4f6;
+      }
+      main { max-width: 42rem; margin: 0 auto; }
+      h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+      p.lede { color: #6b7280; margin: 0 0 2rem; }
+      ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.75rem; }
+      a.card {
+        display: block; padding: 1rem 1.25rem; background: #fff; text-decoration: none;
+        border: 1px solid #e5e7eb; border-radius: 0.75rem; color: inherit;
+      }
+      a.card:hover { border-color: #9ca3af; }
+      code { font-size: 0.8125rem; color: #4b5563; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Credo AI Web Components</h1>
+      <p class="lede">
+        Standalone embeddable custom elements. Each page below is a host-page
+        reference implementation — view source to see the embedding contract.
+      </p>
+      <ul>
+        <li>
+          <a class="card" href="/registry/use-case-intake-form.html">
+            Use Case Intake Form<br /><code>&lt;credo-ai-use-case-intake-form&gt;</code>
+          </a>
+        </li>
+        <li>
+          <a class="card" href="/registry/use-case-edit-form.html">
+            Use Case Edit Form<br /><code>&lt;credo-ai-use-case-edit-form&gt;</code>
+          </a>
+        </li>
+        <li>
+          <a class="card" href="/registry/use-case-preview.html">
+            Use Case Preview<br /><code>&lt;credo-ai-use-case-preview&gt;</code>
+          </a>
+        </li>
+      </ul>
+    </main>
+  </body>
+</html>

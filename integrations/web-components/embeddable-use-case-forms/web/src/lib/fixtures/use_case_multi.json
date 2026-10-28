@@ -1,0 +1,11 @@
+{
+  "data": {
+    "id": "uc-1",
+    "type": "use_cases",
+    "attributes": {
+      "name": "Support Copilot",
+      "description": "AI assistant for support agents",
+      "questionnaire_ids": ["qn-1", "qn-2"]
+    }
+  }
+}

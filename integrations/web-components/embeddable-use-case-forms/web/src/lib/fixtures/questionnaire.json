@@ -1,0 +1,71 @@
+{
+  "data": {
+    "id": "qn-1",
+    "type": "questionnaires",
+    "attributes": {
+      "name": "AI Transparency Intake",
+      "key": "TCV2",
+      "version": 12,
+      "sections": [
+        {
+          "id": "sec-header",
+          "title": "Header",
+          "description": "Basics",
+          "questions": [
+            {
+              "id": "q-product",
+              "question": "Product name",
+              "evidence_type": "select",
+              "select_options": ["Alpha", "Beta Suite", "Gamma"],
+              "multiple": false,
+              "required": true,
+              "hidden": false
+            },
+            {
+              "id": "q-desc",
+              "question": "What does this AI do?",
+              "description": "Customer-facing summary",
+              "evidence_type": "text",
+              "multiple": false,
+              "required": true,
+              "hidden": false
+            },
+            {
+              "id": "q-hidden",
+              "question": "Internal only",
+              "evidence_type": "short_text",
+              "hidden": true
+            }
+          ]
+        },
+        {
+          "id": "sec-data",
+          "title": "Data Handling",
+          "questions": [
+            {
+              "id": "q-sources",
+              "question": "Data sources",
+              "evidence_type": "select",
+              "select_options": ["Public", "Licensed", "Customer", "Synthetic", "Web", "Internal", "Other"],
+              "multiple": true,
+              "required": false,
+              "hidden": false
+            },
+            {
+              "id": "q-launch",
+              "question": "Launch date",
+              "evidence_type": "date",
+              "hidden": false
+            },
+            {
+              "id": "q-doc",
+              "question": "Upload model card",
+              "evidence_type": "file",
+              "hidden": false
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
