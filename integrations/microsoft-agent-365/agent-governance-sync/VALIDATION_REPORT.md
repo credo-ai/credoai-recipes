@@ -30,7 +30,7 @@ agent is published — is not buildable: Agent 365 exposes no webhook or change 
 - [x] Standard folder shape: `README.md`, `.env.example`, `TESTING.md`, `server/python/`
 - [x] `.env.example` is placeholders only; `.env` and the saved admin token are gitignored
 - [x] `TESTING.md` lists real failure modes, each one run (see _Live run_ below)
-- [x] README carries the `hub:` frontmatter; `validate_metadata.py` passes
+- [x] `cookbook-card.yaml` beside the README carries the card data (the README is human-only); `validate_metadata.py` passes
 - [x] Python only. `CONTRIBUTING.md` says to ship Python and TypeScript for cookbook delivery, but
       the three most recently merged cookbooks (Splunk, Amazon Bedrock, Azure AI Foundry) are
       Python only; this follows them. **Flagged for a decision.**
@@ -107,6 +107,13 @@ scope selects 36.
 | 10  | `is_cleared()` against a Use Case a person had cleared                                                                                                                                                                        | `True` — last stage (`end`), step `clear`                                                                         |
 | 11  | `CREDO_INTAKE_QUESTIONNAIRE=NOPE+9 --limit 3`                                                                                                                                                                                 | Exit `1`; all 3 agents processed, `errors=3`, each naming the setting to check                                    |
 | 12  | The setup-failure rows of `TESTING.md` Step 9: bad key, unreachable host, missing and wrong secret, unrecognized key, bad package types, bad questionnaire, unknown asset ID, no saved sign-in, `--login` without a client ID | Exit `2` with the documented message, no traceback                                                                |
+
+**Found after the first run — an `&` in an agent name.** Credo AI rejects a Use Case name that
+contains `&` with `422` and an unhelpful body (`Client or server error: 400`). Of 24 special
+characters tried, `&` is the only one refused. The agent `Website Q&A` therefore failed on every
+run while the rest of the batch succeeded. Names now pass through `credo_safe_name`, so it is
+created as `Website Q and A`; a second run reports it `unchanged`. **Worth reporting to the
+integration-service team: the error should say which field was refused.**
 
 **Logic checks (35, stubbed, nothing real touched)** — all pass: the enforcement decision table
 (block, unblock, already-correct, dry-run makes zero calls, one failing call is isolated, an agent

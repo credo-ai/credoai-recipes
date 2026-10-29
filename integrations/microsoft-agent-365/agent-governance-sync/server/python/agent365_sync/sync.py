@@ -208,9 +208,16 @@ def _short_id(asset_id: str) -> str:
     return asset_id.split("-")[0] if "-" in asset_id else asset_id[-8:]
 
 
+def credo_safe_name(display_name: str) -> str:
+    """Credo AI rejects a Use Case name containing "&" (422, no useful message); every other
+    character tried was accepted. "Website Q&A" becomes "Website Q and A"."""
+    return re.sub(r"\s*&\s*", " and ", display_name).strip()
+
+
 def name_candidates(display_name: str, asset_id: str) -> list[str]:
     """The clean name first, then progressively more specific ones, for when
     another Use Case already holds the clean name."""
+    display_name = credo_safe_name(display_name)
     return [
         display_name,
         f"{display_name} ({_short_id(asset_id)})",

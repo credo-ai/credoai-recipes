@@ -1,12 +1,10 @@
 """Delegated (signed-in admin) Microsoft Graph auth, used only by `--enforce`.
 
-Blocking or unblocking a Copilot Studio / Agent Builder agent with an app-only
-token fails with `424 ... without user context is not supported`, and
-Microsoft's own reference lists Application permission as "Not available" for
-both calls. So those two calls run as a user: an admin signs in once with a
-device code (`python main.py --login`), the refresh token is saved, and every
-later run silently trades it for a fresh access token — no interactive sign-in,
-so a scheduled run still works unattended.
+Why block and unblock need a signed-in admin, and not the app-only token that
+reads the catalog, is explained in `agent365.py`. The mechanics: an admin signs
+in once with a device code (`python main.py --login`), the refresh token is
+saved, and every later run silently trades it for a fresh access token — no
+interactive sign-in, so a scheduled run still works unattended.
 
 Plain HTTP against the two Entra OAuth endpoints (device-code grant and
 refresh-token grant). Entra rotates the refresh token on every use, so the

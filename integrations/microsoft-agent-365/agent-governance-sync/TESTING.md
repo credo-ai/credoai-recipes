@@ -202,21 +202,22 @@ the workflow. `--enforce` must keep that agent **blocked**.
 
 Each of these must degrade, not crash. Check the exit code every time.
 
-| Scenario                         | How to trigger                                                          | Expected                                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Bad Credo AI key                 | `CREDO_API_KEY=wrong python main.py --dry-run`                          | Exit `2`: `Credo AI: Authentication failed: Invalid API key…`, no partial writes                    |
-| Credo AI host unreachable        | `CREDO_API_BASE_URL=https://api.credo.invalid python main.py --dry-run` | Exit `2`, a readable message naming the host                                                        |
-| Missing Microsoft secret         | `MS_CLIENT_SECRET= python main.py --dry-run`                            | Exit `2`: `Missing MS_CLIENT_SECRET…`                                                               |
-| Wrong Microsoft secret           | `MS_CLIENT_SECRET=wrong python main.py --dry-run`                       | Exit `2`: `Entra refused the app credentials (invalid_client): AADSTS7000215…`                      |
-| Unrecognized `.env` key          | Add `AGENT365_NONSENSE=1` to `.env`                                     | Exit `2` naming the key, not a traceback                                                            |
-| Invalid package types            | `AGENT365_PACKAGE_TYPES=agents python main.py --dry-run`                | Exit `2` naming `AGENT365_PACKAGE_TYPES` and the allowed values                                     |
-| Malformed questionnaire          | `CREDO_INTAKE_QUESTIONNAIRE=AGENT python main.py --dry-run`             | Exit `2` naming `CREDO_INTAKE_QUESTIONNAIRE` and the expected `<key>+<version>` shape               |
-| Unknown asset ID                 | `python main.py --dry-run --asset-id T_nope`                            | Exit `2`: `Not in the Agent 365 catalog: T_nope`                                                    |
-| `--enforce`, never signed in     | `AGENT365_TOKEN_CACHE=/tmp/none.json python main.py --enforce`          | Exit `2`: `No saved admin sign-in…` — before any write                                              |
-| `--login`, no client ID          | `MS_CLIENT_ID= python main.py --login`                                  | Exit `2`: `Missing MS_CLIENT_ID`                                                                    |
-| A Use Case operation is rejected | `CREDO_INTAKE_QUESTIONNAIRE=NOPE+9 python main.py --limit 3`            | Exit `1`; **every** agent still processed, one error per agent, the questionnaire named in the hint |
-| No Agent 365 license             | Run against an unlicensed tenant                                        | Exit `2`: `no Microsoft Agent 365 license`                                                          |
-| Throttled by Microsoft           | (rarely reproducible) Graph answers `429`                               | Retried with the `Retry-After` wait, up to 4 attempts, logged as warnings                           |
+| Scenario                         | How to trigger                                                                                | Expected                                                                                            |
+| -------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Bad Credo AI key                 | `CREDO_API_KEY=wrong python main.py --dry-run`                                                | Exit `2`: `Credo AI: Authentication failed: Invalid API key…`, no partial writes                    |
+| Credo AI host unreachable        | `CREDO_API_BASE_URL=https://api.credo.invalid python main.py --dry-run`                       | Exit `2`, a readable message naming the host                                                        |
+| Missing Microsoft secret         | `MS_CLIENT_SECRET= python main.py --dry-run`                                                  | Exit `2`: `Missing MS_CLIENT_SECRET…`                                                               |
+| Wrong Microsoft secret           | `MS_CLIENT_SECRET=wrong python main.py --dry-run`                                             | Exit `2`: `Entra refused the app credentials (invalid_client): AADSTS7000215…`                      |
+| Unrecognized `.env` key          | Add `AGENT365_NONSENSE=1` to `.env`                                                           | Exit `2` naming the key, not a traceback                                                            |
+| Invalid package types            | `AGENT365_PACKAGE_TYPES=agents python main.py --dry-run`                                      | Exit `2` naming `AGENT365_PACKAGE_TYPES` and the allowed values                                     |
+| Malformed questionnaire          | `CREDO_INTAKE_QUESTIONNAIRE=AGENT python main.py --dry-run`                                   | Exit `2` naming `CREDO_INTAKE_QUESTIONNAIRE` and the expected `<key>+<version>` shape               |
+| Unknown asset ID                 | `python main.py --dry-run --asset-id T_nope`                                                  | Exit `2`: `Not in the Agent 365 catalog: T_nope`                                                    |
+| Agent name contains `&`          | An agent named like `Website Q&A` (Credo AI rejects `&` in a Use Case name with a bare `422`) | Created as `Website Q and A`; the second run reports `unchanged`, not an error                      |
+| `--enforce`, never signed in     | `AGENT365_TOKEN_CACHE=/tmp/none.json python main.py --enforce`                                | Exit `2`: `No saved admin sign-in…` — before any write                                              |
+| `--login`, no client ID          | `MS_CLIENT_ID= python main.py --login`                                                        | Exit `2`: `Missing MS_CLIENT_ID`                                                                    |
+| A Use Case operation is rejected | `CREDO_INTAKE_QUESTIONNAIRE=NOPE+9 python main.py --limit 3`                                  | Exit `1`; **every** agent still processed, one error per agent, the questionnaire named in the hint |
+| No Agent 365 license             | Run against an unlicensed tenant                                                              | Exit `2`: `no Microsoft Agent 365 license`                                                          |
+| Throttled by Microsoft           | (rarely reproducible) Graph answers `429`                                                     | Retried with the `Retry-After` wait, up to 4 attempts, logged as warnings                           |
 
 ---
 

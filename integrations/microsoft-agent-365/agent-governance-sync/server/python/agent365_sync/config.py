@@ -1,10 +1,9 @@
 """Application configuration loaded from environment variables / `.env`.
 
-Two sets of Microsoft credentials exist on purpose. Reading the catalog uses
-app-only auth (`MS_CLIENT_SECRET`), so a scheduled run needs no human. Blocking
-and unblocking an agent cannot: Microsoft rejects an app-only token for those
-two calls with `424 ... without user context is not supported`, so `--enforce`
-runs as a signed-in admin instead — see `delegated_auth.py` and README Step 5.
+Two sets of Microsoft credentials exist on purpose: an app-only secret
+(`MS_CLIENT_SECRET`) for reading the catalog, and a signed-in admin for
+`--enforce`. Why is explained in `agent365.py`; the sign-in is in
+`delegated_auth.py` and README Step 5.
 """
 
 from __future__ import annotations
