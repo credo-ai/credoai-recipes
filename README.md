@@ -20,8 +20,7 @@ reads them from the environment and says so up front.
 | [AWS Bedrock](./integrations/aws-bedrock/ai-inventory-sync) | AI Inventory Sync         | Cookbook (run your own scheduled job) | ✅ Available                                 |
 | [Email](./integrations/email/governance-notifications)      | Governance Notifications  | Cookbook (run your own server)        | 🧪 Preview — model-added emails              |
 
-See [integrations/README.md](./integrations/README.md) for the full quick start. Don't see what you need?
-[Open an integration request](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md).
+See [integrations/README.md](./integrations/README.md) for the full quick start.
 
 ## Prerequisites
 

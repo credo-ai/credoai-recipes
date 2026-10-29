@@ -1,0 +1,27 @@
+# Card data for the Credo AI Integrations Hub. README.md stays human-only.
+name: Microsoft Agent 365 Governance Sync
+# PLACEHOLDER: logo.svg is a glyph, not a Microsoft mark.
+# Replace it with the approved Microsoft Agent 365 brand asset before publishing.
+logo: logo.svg
+category: Agent gateways & AI security  # PROVISIONAL: the Type taxonomy is not finalized
+support_level: credo-ai-maintained
+functions:
+- Registry Sync
+- Deployment Gating
+targets:
+- Microsoft Agent 365
+- Microsoft Entra ID
+target_group: Microsoft
+short_description: Registers every agent built in Microsoft Agent 365 as a Credo AI Use Case, and can block each one until its governance workflow clears it.
+what_it_does: A scheduled command that reads your Microsoft Agent 365 catalog and gives each agent your organization built — in Copilot Studio, Agent Builder or Foundry — a Use Case in Credo AI, kept current as the agent changes. With enforcement switched on, it also blocks every agent whose Use Case has not cleared its governance workflow and unblocks the ones that have, so only governed agents can run. Agent 365 has no webhook for new agents, so this polls on a schedule.
+data_flow:
+  source: Microsoft Agent 365
+  destination: Credo AI
+  direction: bidirectional
+you_will_need:
+- A Microsoft 365 tenant licensed for Microsoft Agent 365 (or Microsoft 365 E7, which includes it)
+- A Microsoft Entra app registration with the CopilotPackages.Read.All application permission, admin-consented
+- 'For enforcement: an account with the AI Administrator or Global Administrator role, and the delegated CopilotPackages.ReadWrite.All permission, admin-consented'
+- A Credo AI API key and tenant name
+- Python 3.12+
+github_url: https://github.com/credo-ai/credoai-recipes/tree/main/integrations/microsoft-agent-365/agent-governance-sync
