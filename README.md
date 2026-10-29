@@ -12,16 +12,9 @@ reads them from the environment and says so up front.
 
 ## Integrations
 
-| Target System                                                                   | Integration Pattern       | Delivery Type                         | Status                                                        |
-| ------------------------------------------------------------------------------- | ------------------------- | ------------------------------------- | ------------------------------------------------------------- |
-| [JIRA](./integrations/jira/use-case-creation)                                   | Use Case Intake           | Cookbook (run your own server)        | ✅ Available                                                  |
-| [ServiceNow](./integrations/servicenow/use-case-creation)                       | Use Case Intake           | Native Integration (no server)        | ✅ Available                                                  |
-| [Splunk](./integrations/splunk/shadow-ai-event-ingestion)                       | Shadow AI Event Ingestion | Cookbook (run your own poller)        | 🧪 Preview — talks to a backend API directly                  |
-| [AWS Bedrock](./integrations/aws-bedrock/ai-inventory-sync)                     | AI Inventory Sync         | Cookbook (run your own scheduled job) | ✅ Available                                                  |
-| [Email](./integrations/email/governance-notifications)                          | Governance Notifications  | Cookbook (run your own server)        | 🧪 Preview — model-added emails                               |
-| [Microsoft Agent 365](./integrations/microsoft-agent-365/agent-governance-sync) | Agent Governance Sync     | Cookbook (run your own scheduled job) | 🧪 Preview — block and unblock use Microsoft's beta Graph API |
-
-See [integrations/README.md](./integrations/README.md) for the full quick start. Don't see what you need?
+Cookbooks that connect an external system to Credo AI live in [`integrations/`](./integrations). See
+[integrations/README.md](./integrations/README.md) for the list of available integrations, with their status and
+delivery type, and the quick start. Don't see what you need?
 [Open an integration request](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md).
 
 ## Prerequisites
