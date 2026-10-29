@@ -17,6 +17,8 @@ Each recipe is self-contained — clone, configure, and run.
 | [Email](./email/governance-notifications)                          | Governance Notifications  | Cookbook (run your own server)                         | 🧪 Preview — model-added emails                               |
 | [Microsoft Agent 365](./microsoft-agent-365/agent-governance-sync) | Agent Governance Sync     | Cookbook (run your own scheduled job, no server)       | 🧪 Preview — block and unblock use Microsoft's beta Graph API |
 
+More systems and patterns are on the [request board](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md) — see [Request an integration](#request-an-integration) below.
+
 ---
 
 ## How to use a recipe
@@ -41,6 +43,12 @@ cd credoai-recipes/integrations/servicenow/use-case-creation
 ```
 
 Then follow the README — it walks through the System Properties, Script Include, and Business Rule you create directly inside ServiceNow.
+
+---
+
+## Request an integration
+
+Don't see what you need? [Open an issue](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md) using the Integration Request template. If enough customers ask for the same thing, it becomes the next cookbook.
 
 ---
 
