@@ -3,7 +3,8 @@
 Work through these in order. Step 1 needs a Databricks workspace with at least one deployed agent but
 touches nothing in Credo AI. Step 2 creates a Source record in your Credo AI tenant. Step 3 reads
 Databricks only. Steps 4–6 write to a Credo AI tenant — use a **sandbox tenant only**, and never point
-a first run at production.
+a first run at production. Step 7 covers Genie agents, which have their own read-only check and then
+write Agent entities to the same tenant.
 
 ---
 
@@ -99,6 +100,48 @@ the description lists `Aliases: champion=1`.
 | Credo AI returns 5xx                                | Retried with backoff; if it still fails, `failed=1` and the next cycle retries          |
 | Use case deleted in Credo AI while the poller runs  | Next change logs `is gone; recreating` and creates it again                             |
 | Model deployed on a second endpoint                 | Still one use case, with a second `Deployment:` line                                    |
+
+## Step 7: Genie agents
+
+**Read-only check, no Credo AI.** The Genie API still calls these "spaces":
+
+```bash
+python -c "
+import main
+from databricks.sdk import WorkspaceClient
+w = WorkspaceClient()
+spaces = main.list_genie_spaces(w)
+print(f'{len(spaces)} Genie agent(s) visible')
+for s in spaces:
+    print(' ', s.space_id, s.title)
+"
+```
+
+Every title printed becomes a Credo AI **agent** (not a use case). `DATABRICKS_CATALOG` /
+`DATABRICKS_SCHEMA` do not narrow this list.
+
+**Sync.** Needs `CREDO_BACKEND_BASE_URL` in `.env`. Run `python main.py`; the first cycle should add:
+
+```text
+seeded 0 existing Credo AI agent(s)
+genie cycle: scanned=1 created=1 updated=0 unchanged=0 skipped=0 failed=0
+```
+
+In Credo AI, open the agents list and check the name (the space title) and the description. Later
+cycles read `created=0 updated=0 unchanged=<scanned>`. To confirm incremental pickup, edit the
+agent's description in Credo AI; the next cycle logs `updated` and restores it. Edit the Genie
+space's title or description in Databricks and the description follows on the next cycle.
+
+| Scenario                                             | Expected behavior                                                               |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Stop and restart the poller                          | `created=0`, everything `unchanged` — never duplicated                          |
+| `CREDO_BACKEND_BASE_URL` unset                       | One warning at startup; deployed agents sync, no `genie cycle` line             |
+| `CREDO_BACKEND_BASE_URL` unreachable                 | `Genie agents will not be synced: token exchange failed …`; deployed still sync |
+| Tenant has no `agent` entity type                    | `Genie agents will not be synced: this tenant has no 'agent' entity type`       |
+| Two Genie agents with the same title                 | First syncs, second logs `already synced this cycle`, `skipped=1`               |
+| Genie agent renamed in Databricks                    | A second Credo AI agent is created under the new title                          |
+| Agent deleted in Credo AI while the poller runs      | Next change logs `is gone; recreating` and creates it again                     |
+| `DATABRICKS_CATALOG` set to a catalog with no agents | `cycle: scanned=0`, Genie agents still sync                                     |
 
 ## Cold-setup test
 

@@ -18,7 +18,7 @@ Each recipe is self-contained — clone, configure, and run.
 | [Email](./email/governance-notifications)                              | Governance Notifications  | Cookbook (run your own server)                         | 🧪 Preview — model-added emails                     |
 | [Databricks (Workspace Registry)](./databricks/mlflow-model-registry)  | Model Registry Sync       | Cookbook (run your own server, inbound webhook)        | 🧪 Preview — legacy Workspace Model Registry only   |
 | [Databricks (Unity Catalog)](./databricks/unity-catalog-registry)      | Model Registry Sync       | Cookbook (run your own poller, no inbound webhook)     | 🧪 Preview — polling; Unity Catalog has no webhooks |
-| [Databricks (Unity Catalog Agents)](./databricks/unity-catalog-agents) | Agent Sync                | Cookbook (run your own poller, no inbound webhook)     | 🧪 Preview — polling; deployed agents only          |
+| [Databricks (Unity Catalog Agents)](./databricks/unity-catalog-agents) | Agent Sync                | Cookbook (run your own poller, no inbound webhook)     | 🧪 Preview — polling; deployed + Genie agents       |
 
 More systems and patterns are on the [request board](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md) — see [Request an integration](#request-an-integration) below.
 

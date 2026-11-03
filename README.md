@@ -22,7 +22,7 @@ reads them from the environment and says so up front.
 | [Email](./integrations/email/governance-notifications)                              | Governance Notifications  | Cookbook (run your own server)        | 🧪 Preview — model-added emails                     |
 | [Databricks (Workspace Registry)](./integrations/databricks/mlflow-model-registry)  | Model Registry Sync       | Cookbook (run your own server)        | 🧪 Preview — legacy Workspace Model Registry only   |
 | [Databricks (Unity Catalog)](./integrations/databricks/unity-catalog-registry)      | Model Registry Sync       | Cookbook (run your own poller)        | 🧪 Preview — polling; Unity Catalog has no webhooks |
-| [Databricks (Unity Catalog Agents)](./integrations/databricks/unity-catalog-agents) | Agent Sync                | Cookbook (run your own poller)        | 🧪 Preview — polling; deployed agents only          |
+| [Databricks (Unity Catalog Agents)](./integrations/databricks/unity-catalog-agents) | Agent Sync                | Cookbook (run your own poller)        | 🧪 Preview — polling; deployed + Genie agents       |
 
 See [integrations/README.md](./integrations/README.md) for the full quick start. Don't see what you need?
 [Open an integration request](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md).

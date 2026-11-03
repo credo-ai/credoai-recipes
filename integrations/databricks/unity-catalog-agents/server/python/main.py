@@ -1,16 +1,20 @@
 """
-Databricks Unity Catalog agents -> Credo AI use case sync.
+Databricks agents -> Credo AI sync. Two kinds of Databricks agent are synced:
 
-Unity Catalog has no "agent" object: an agent is a registered model that was
-deployed with the Databricks Agent Framework (`agents.deploy`). The deployment
-list is therefore what separates agents from the plain models that
-`unity-catalog-registry` syncs, so this polls that list and upserts one Credo AI
-use case per deployed agent. Legacy Workspace Model Registry locations are not
-read.
+1. Deployed agents. Unity Catalog has no "agent" object: an agent is a registered
+   model that was deployed with the Databricks Agent Framework (`agents.deploy`).
+   The deployment list is therefore what separates agents from the plain models
+   that `unity-catalog-registry` syncs, so this polls that list and upserts one
+   Credo AI use case per deployed agent (public Integration API). Legacy
+   Workspace Model Registry locations are not read.
 
-Unity Catalog has no webhooks, so this polls on an interval. The deployment
-list carries no change timestamp, so every cycle re-reads every agent and only
-writes to Credo AI when the rendered description differs.
+2. Genie agents (the Databricks API still calls them "Genie spaces"). Each one is
+   upserted as a Credo AI Agent entity. The public Integration API has no agent
+   resource yet, so these go through the private v2 API instead.
+
+Unity Catalog has no webhooks, so this polls on an interval. Neither list carries
+a change timestamp, so every cycle re-reads every agent and only writes to
+Credo AI when the rendered description differs.
 
 Run: python main.py
 """
@@ -21,6 +25,7 @@ import logging
 import os
 import time
 from collections import Counter
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -41,6 +46,11 @@ log = logging.getLogger("databricks-uc-agent-poller")
 CREDO_BASE_URL = os.environ["CREDO_BASE_URL"].rstrip("/")
 CREDO_API_KEY = os.environ["CREDO_API_KEY"]
 CREDO_TENANT = os.environ["CREDO_TENANT"]
+
+# Private v2 API host, used only for Genie agents (Credo AI Agent entities have no
+# public Integration API route yet). Optional so a deployed-agents-only setup
+# keeps working: without it, Genie agents are skipped with a warning.
+CREDO_BACKEND_BASE_URL = os.environ.get("CREDO_BACKEND_BASE_URL", "").rstrip("/")
 
 # Not free text: `source` resolves against a Source record that must already
 # exist in the tenant, so every use case create 422s until
@@ -74,6 +84,10 @@ REQUEST_DELAY_SECONDS = float(os.environ.get("REQUEST_DELAY_SECONDS", "0.1"))
 # state file has to survive between runs.
 USE_CASES: dict[str, dict[str, Any]] = {}
 
+# Same idea for Genie agents, which live in Credo AI as Agent entities. Entity
+# names are unique per entity type, so this cache is independent of USE_CASES.
+AGENTS: dict[str, dict[str, Any]] = {}
+
 
 class CredoApiError(RuntimeError):
     def __init__(self, message: str, status_code: int | None = None) -> None:
@@ -88,9 +102,16 @@ class CredoClient:
     create or patch one at a time.
     """
 
+    # Overridden by CredoAgentClient, which talks to a different API on the same
+    # retry/refresh machinery.
+    _base_url = CREDO_BASE_URL
+
     def __init__(self, client: httpx.Client) -> None:
         self._client = client
         self._token: str | None = None
+
+    def _auth_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._token}", "X-Tenant": CREDO_TENANT}
 
     def _get_token(self) -> str:
         # Wrapped so callers only ever have to catch CredoApiError, including
@@ -121,13 +142,10 @@ class CredoClient:
             try:
                 resp = self._client.request(
                     method,
-                    f"{CREDO_BASE_URL}{path}",
+                    f"{self._base_url}{path}",
                     json=json_body,
                     params=params,
-                    headers={
-                        "Authorization": f"Bearer {self._token}",
-                        "X-Tenant": CREDO_TENANT,
-                    },
+                    headers=self._auth_headers(),
                     timeout=30,
                 )
             except httpx.RequestError as exc:
@@ -170,6 +188,84 @@ class CredoClient:
         return self._request(
             "PATCH", f"/use_cases/{use_case_id}", json_body=attrs
         ).json()
+
+
+class CredoAgentClient(CredoClient):
+    """Credo AI private v2 API (JSON:API), used for Agent entities only.
+
+    The public Integration API has no agent resource yet, so Genie agents are
+    written here instead. Auth is the `/auth/exchange` flow that
+    setup_credo_source.py uses, not the Integration API's `/auth/token`. Drop this
+    class and use CredoClient once the public API supports agents.
+    """
+
+    _base_url = f"{CREDO_BACKEND_BASE_URL}/api/v2/{CREDO_TENANT}"
+    _JSONAPI = "application/vnd.api+json"
+
+    def _auth_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self._token}",
+            "Accept": self._JSONAPI,
+            "Content-Type": self._JSONAPI,
+        }
+
+    def _get_token(self) -> str:
+        try:
+            resp = self._client.post(
+                f"{CREDO_BACKEND_BASE_URL}/auth/exchange",
+                json={"api_token": CREDO_API_KEY, "tenant": CREDO_TENANT},
+                timeout=30,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise CredoApiError(f"token exchange failed: {exc}") from exc
+        return resp.json()["access_token"]
+
+    def _list(self, path: str, filters: dict[str, str] | None = None) -> list[dict]:
+        items: list[dict] = []
+        params: dict[str, Any] = {"page[limit]": 1000, **(filters or {})}
+        while True:
+            body = self._request("GET", path, params=params).json()
+            items.extend(body["data"])
+            after = (body.get("meta") or {}).get("after")
+            if not after:
+                return items
+            params["page[after]"] = after
+
+    def agent_type_id(self) -> str:
+        # Entity type ids are per tenant, so resolve "agent" by name.
+        for entity_type in self._list("/entity_types"):
+            if entity_type["attributes"]["name"] == "agent":
+                return entity_type["id"]
+        raise CredoApiError("this tenant has no 'agent' entity type")
+
+    def list_agents(self) -> list[dict]:
+        return self._list("/entities", {"filter[type]": "agent"})
+
+    def create_agent(self, type_id: str, name: str, description: str) -> dict:
+        body = {
+            "data": {
+                "type": "entities",
+                "attributes": {
+                    "entity_type_id": type_id,
+                    "name": name,
+                    "description": description,
+                },
+            }
+        }
+        return self._request("POST", "/entities", json_body=body).json()["data"]
+
+    def patch_agent(self, agent_id: str, description: str) -> dict:
+        body = {
+            "data": {
+                "type": "entities",
+                "id": agent_id,
+                "attributes": {"description": description},
+            }
+        }
+        return self._request("PATCH", f"/entities/{agent_id}", json_body=body).json()[
+            "data"
+        ]
 
 
 def in_scope(full_name: str) -> bool:
@@ -243,19 +339,26 @@ def build_description(
     return "\n".join(lines)
 
 
-def upsert_use_case(credo: CredoClient, name: str, description: str) -> tuple[str, str]:
-    """Create the Credo AI use case, or update it if the name is already known.
+def upsert(
+    cache: dict[str, dict[str, Any]],
+    name: str,
+    description: str,
+    create: Callable[[str, str], str],
+    patch: Callable[[str, str], Any],
+) -> tuple[str, str]:
+    """Create the Credo AI record, or update it if the name is already known.
 
-    Returns (action, use_case_id). Use case names are unique, so a later sync
-    of a name that already exists has to patch rather than create a duplicate.
-    An unchanged description makes no call at all.
+    `create(name, description)` returns the new id; `patch(id, description)`
+    updates it. Returns (action, id). Names are unique, so a later sync of a name
+    that already exists has to patch rather than create a duplicate. An unchanged
+    description makes no call at all.
     """
-    existing = USE_CASES.get(name)
+    existing = cache.get(name)
     if existing:
         if (existing["description"] or "").strip() == description.strip():
             return "unchanged", existing["id"]
         try:
-            credo.patch_use_case(existing["id"], {"description": description})
+            patch(existing["id"], description)
             existing["description"] = description
             return "updated", existing["id"]
         except CredoApiError as exc:
@@ -264,15 +367,103 @@ def upsert_use_case(credo: CredoClient, name: str, description: str) -> tuple[st
             # Deleted in Credo AI after we cached its id. Forget it and fall
             # through to create, otherwise every later sync 404s forever.
             log.warning(
-                "Credo AI use case %s (%s) is gone; recreating", name, existing["id"]
+                "Credo AI record %s (%s) is gone; recreating", name, existing["id"]
             )
-            USE_CASES.pop(name, None)
+            cache.pop(name, None)
 
-    created = credo.create_use_case(
-        {"name": name, "description": description, "source": SOURCE}
+    new_id = create(name, description)
+    cache[name] = {"id": new_id, "description": description}
+    return "created", new_id
+
+
+def upsert_use_case(credo: CredoClient, name: str, description: str) -> tuple[str, str]:
+    """Create or update the Credo AI use case for a deployed agent."""
+    return upsert(
+        USE_CASES,
+        name,
+        description,
+        lambda n, d: credo.create_use_case(
+            {"name": n, "description": d, "source": SOURCE}
+        )["id"],
+        lambda i, d: credo.patch_use_case(i, {"description": d}),
     )
-    USE_CASES[name] = {"id": created["id"], "description": description}
-    return "created", created["id"]
+
+
+def list_genie_spaces(workspace: WorkspaceClient) -> list[Any]:
+    """Every Genie agent the token can see, across all pages.
+
+    Spaces have no catalog or schema, so DATABRICKS_CATALOG / DATABRICKS_SCHEMA do
+    not apply. The list response omits `parent_path`; `sync_genie_space` fetches it.
+    """
+    spaces: list[Any] = []
+    token: str | None = None
+    while True:
+        page = workspace.genie.list_spaces(page_size=100, page_token=token)
+        spaces.extend(page.spaces or [])
+        token = page.next_page_token
+        if not token:
+            return spaces
+
+
+def build_genie_description(space: Any, host: str) -> str:
+    """Compose the Credo AI Agent `description` for a Genie agent.
+
+    Same rule as `build_description`: deterministic, since the next cycle compares
+    it with what Credo AI holds. Agent entities have no `source` attribute, so
+    provenance lives here.
+    """
+    lines = ["Databricks Genie agent.", f"Space ID: {space.space_id}"]
+    if space.description:
+        lines.append(f"Description: {space.description}")
+    if space.parent_path:
+        lines.append(f"Location: {space.parent_path}")
+    if space.warehouse_id:
+        lines.append(f"SQL warehouse: {space.warehouse_id}")
+    if space.update_time:
+        # The SDK returns a protobuf Timestamp, not a string.
+        lines.append(f"Last updated: {space.update_time.ToJsonString()}")
+    lines.append(f"Link: {host}/genie/rooms/{space.space_id}")
+    return "\n".join(lines)
+
+
+def sync_genie_space(
+    credo: CredoAgentClient,
+    workspace: WorkspaceClient,
+    type_id: str,
+    space: Any,
+    seen: set[str],
+) -> str:
+    """Upsert one Genie agent into Credo AI as an Agent. Returns the action taken."""
+    # Upsert is keyed by name, so two spaces sharing a title would patch one
+    # Credo AI agent back and forth every cycle. Keep the first, skip the rest.
+    if space.title in seen:
+        log.warning(
+            "skipping Genie agent %s: title %r already synced this cycle",
+            space.space_id,
+            space.title,
+        )
+        return "skipped"
+    seen.add(space.title)
+
+    try:
+        # Not include_serialized_space: that needs CAN EDIT, and nothing here uses it.
+        detail = workspace.genie.get_space(space.space_id)
+    except NotFound:
+        log.warning("skipping Genie agent %s: deleted mid-cycle", space.space_id)
+        return "skipped"
+
+    description = build_genie_description(
+        detail, (workspace.config.host or "").rstrip("/")
+    )
+    action, agent_id = upsert(
+        AGENTS,
+        detail.title,
+        description,
+        lambda n, d: credo.create_agent(type_id, n, d)["id"],
+        credo.patch_agent,
+    )
+    log.info("%s Credo AI agent %s (%s)", action, agent_id, detail.title)
+    return action
 
 
 def sync_agent(
@@ -317,6 +508,19 @@ def sync_agent(
     return action
 
 
+def log_counts(kind: str, scanned: int, counts: Counter[str]) -> None:
+    log.info(
+        "%s: scanned=%d created=%d updated=%d unchanged=%d skipped=%d failed=%d",
+        kind,
+        scanned,
+        counts["created"],
+        counts["updated"],
+        counts["unchanged"],
+        counts["skipped"],
+        counts["failed"],
+    )
+
+
 def run_cycle(credo: CredoClient, workspace: WorkspaceClient) -> None:
     """One poll: list deployed agents and sync each."""
     agents = list_deployed_agents(workspace)
@@ -334,15 +538,54 @@ def run_cycle(credo: CredoClient, workspace: WorkspaceClient) -> None:
             log.warning("skipping %s: %r", full_name, exc)
         time.sleep(REQUEST_DELAY_SECONDS)
 
-    log.info(
-        "cycle: scanned=%d created=%d updated=%d unchanged=%d skipped=%d failed=%d",
-        len(agents),
-        counts["created"],
-        counts["updated"],
-        counts["unchanged"],
-        counts["skipped"],
-        counts["failed"],
-    )
+    log_counts("cycle", len(agents), counts)
+
+
+def run_genie_cycle(
+    credo: CredoAgentClient, workspace: WorkspaceClient, type_id: str
+) -> None:
+    """One poll of Genie agents. Kept apart from run_cycle so that a failure here
+    (Genie not enabled, no permission, v2 API down) never costs the deployed-agent
+    sync, and the reverse."""
+    spaces = list_genie_spaces(workspace)
+    counts: Counter[str] = Counter()
+    seen: set[str] = set()
+
+    for space in spaces:
+        try:
+            counts[sync_genie_space(credo, workspace, type_id, space, seen)] += 1
+        except Exception as exc:  # see run_cycle: one space must not abort the rest
+            counts["failed"] += 1
+            log.warning("skipping Genie agent %s: %r", space.space_id, exc)
+        time.sleep(REQUEST_DELAY_SECONDS)
+
+    log_counts("genie cycle", len(spaces), counts)
+
+
+def setup_genie_sync(http: httpx.Client) -> tuple[CredoAgentClient, str] | None:
+    """Connect to the v2 API and seed AGENTS. None (and a warning) if Genie agents
+    can't be synced; deployed agents still are."""
+    if not CREDO_BACKEND_BASE_URL:
+        log.warning(
+            "CREDO_BACKEND_BASE_URL is not set; Genie agents will not be synced"
+        )
+        return None
+    credo = CredoAgentClient(http)
+    try:
+        type_id = credo.agent_type_id()
+        for agent in credo.list_agents():
+            AGENTS.setdefault(
+                agent["attributes"]["name"],
+                {
+                    "id": agent["id"],
+                    "description": agent["attributes"].get("description"),
+                },
+            )
+    except CredoApiError as exc:
+        log.warning("Genie agents will not be synced: %s", exc)
+        return None
+    log.info("seeded %d existing Credo AI agent(s)", len(AGENTS))
+    return credo, type_id
 
 
 def main() -> None:
@@ -372,6 +615,8 @@ def main() -> None:
             )
         log.info("seeded %d existing Credo AI use case(s)", len(USE_CASES))
 
+        genie = setup_genie_sync(credo_http)
+
         while True:
             try:
                 run_cycle(credo, workspace)
@@ -380,6 +625,12 @@ def main() -> None:
                 # per agent. Whatever it raises, the poller outlives it and
                 # tries again next interval instead of exiting.
                 log.exception("cycle failed; retrying in %ds", POLL_INTERVAL_SECONDS)
+            if genie:
+                agent_client, agent_type_id = genie
+                try:
+                    run_genie_cycle(agent_client, workspace, agent_type_id)
+                except Exception:
+                    log.exception("genie cycle failed; retrying next interval")
             time.sleep(POLL_INTERVAL_SECONDS)
 
 
