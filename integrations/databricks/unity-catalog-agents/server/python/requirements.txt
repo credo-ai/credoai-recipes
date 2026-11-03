@@ -1,0 +1,6 @@
+httpx==0.27.0
+python-dotenv==1.0.1
+# Databricks recommends pinning the exact SDK version while it is Beta. Used here only for
+# the Unity Catalog reads (registered_models.get, model_versions.list) and the raw
+# GET /api/2.0/agents/deployments call through its authenticated api_client.
+databricks-sdk==0.139.0
