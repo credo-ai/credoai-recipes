@@ -1,0 +1,40 @@
+{
+  "custom_fields": [
+    {
+      "name": "Azure Subscription ID",
+      "element_type": "input",
+      "metadata": {
+        "description": "Azure Subscription ID"
+      },
+      "target": "use_case",
+      "type": "string"
+    },
+    {
+      "name": "Azure Resource Group",
+      "element_type": "input",
+      "metadata": {
+        "description": "Azure Resource Group"
+      },
+      "target": "use_case",
+      "type": "string"
+    },
+    {
+      "name": "Azure Project ID",
+      "element_type": "input",
+      "metadata": {
+        "description": "Azure Project ID"
+      },
+      "target": "use_case",
+      "type": "string"
+    },
+    {
+      "name": "Azure Project's Connection String",
+      "element_type": "input",
+      "metadata": {
+        "description": "Azure Project's Connection String"
+      },
+      "target": "use_case",
+      "type": "string"
+    }
+  ]
+}
