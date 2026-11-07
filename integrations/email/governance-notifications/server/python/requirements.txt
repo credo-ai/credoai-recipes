@@ -1,7 +1,6 @@
-# Credo AI SDK. The scenarios beyond #5 use users, entities, tasks, entity
-# reviews and webhooks, which ship in the SDK release after 1.3.0; until it is
-# published, see README "Preview: the SDK release this needs".
-pycredoai==1.3.0
+# Credo AI SDK. 1.4.0 is the first release with the users, entities, tasks,
+# entity reviews and webhooks resources the scenarios and setup_webhook.py use.
+pycredoai==1.4.0
 
 fastapi==0.143.0
 uvicorn==0.54.0

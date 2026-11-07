@@ -21,10 +21,8 @@ use case owners, admins, reviewers and model creators.
 - Every delivery's signature is checked, so only Credo AI can trigger an email
 - Each scenario is one small handler, so adding your own is a short change (see [Code layout](#code-layout))
 
-> 🧪 **Preview: the SDK release this needs.** Scenario #5 runs on `pycredoai` 1.3.0. The others, and
-> `setup_webhook.py`, use the SDK's users, entities, tasks, entity reviews and webhooks resources, which ship
-> in the next `pycredoai` release. `requirements.txt` will pin that release when it's published; until then
-> this cookbook is a preview.
+Needs `pycredoai` 1.4.0 or later: the scenarios and `setup_webhook.py` use its users, entities, tasks, entity
+reviews and webhooks resources. `requirements.txt` pins 1.4.0.
 
 ---
 
