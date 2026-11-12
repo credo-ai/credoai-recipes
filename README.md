@@ -1,13 +1,15 @@
 # Credo AI Recipes
 
-Runnable examples for the [Credo AI](https://www.credo.ai) platform. Two kinds live here:
+Runnable examples for the [Credo AI](https://www.credo.ai) platform. Three kinds live here:
 
 - **Integrations** (`integrations/`) — connect an external system (JIRA, ServiceNow, ...) to Credo AI.
   Each one is a full cookbook: README, env vars, and either a runnable server or an in-platform script.
+- **Data migration** (`data-migration/`) — self-serve tools for getting your data into Credo AI:
+  bulk-import use cases and assets from a spreadsheet, or move data between tenants.
 - **Recipes** — standalone Python scripts or Jupyter notebooks showing how to do one thing end to end
   against the Credo AI SDK directly.
 
-Both are small, self-contained, and runnable from a clean checkout. If something needs credentials, it
+All are small, self-contained, and runnable from a clean checkout. If something needs credentials, it
 reads them from the environment and says so up front.
 
 ## Integrations
@@ -22,6 +24,15 @@ reads them from the environment and says so up front.
 
 See [integrations/README.md](./integrations/README.md) for the full quick start. Don't see what you need?
 [Open an integration request](https://github.com/credo-ai/credoai-recipes/issues/new?template=integration_request.md).
+
+## Data Migration
+
+| Recipe                                                        | What it does                                                                                                            | Status         |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------- |
+| [Use Case Bulk Import](./data-migration/use-case-bulk-import) | Upload a spreadsheet of use cases (plus models, vendors, questionnaire answers, custom fields, and risk scenario links) | ✅ Available   |
+| Tenant-to-Tenant Migration                                    | Copy governance data from one Credo AI tenant to another                                                                | 🚧 In progress |
+
+See [data-migration/README.md](./data-migration/README.md) for which one to use and the conventions they share.
 
 ## Prerequisites
 
