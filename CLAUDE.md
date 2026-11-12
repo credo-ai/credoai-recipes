@@ -5,12 +5,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository Overview
 
 This is **Credo AI Recipes** — a public collection of runnable examples for the
-[Credo AI](https://www.credo.ai) platform. It holds two kinds of content:
+[Credo AI](https://www.credo.ai) platform. It holds three kinds of content:
 
 - `integrations/<system>/<pattern>/` — cookbooks connecting an external system to Credo AI. Each is
   self-contained: README, `.env.example`, `TESTING.md`, and either a `server/{python,typescript}/` app
   (delivery type: cookbook) or an in-platform script documented in the README (delivery type: native
   integration — nothing to run here, config/script lives in the target system).
+- `data-management/<what-it-does>/` — self-serve tools for customers managing their own Credo AI data:
+  bulk import from a spreadsheet (`use-case-bulk-import/`) and tenant-to-tenant migration. Run once or
+  periodically, not live connections, so they don't belong in `integrations/`. Each is a folder with a
+  README; deps go in the root `dev` group. Conventions (public API only, `--dry-run`, safe re-runs) are in
+  `data-management/README.md`.
 - Top-level `.py` scripts or `.ipynb` notebooks — one task against the Credo AI SDK directly, end to end.
 
 The SDK-facing part of this repo is deliberately **not a distributable package** (`package = false` in
@@ -28,6 +33,7 @@ the root `uv`/`pyproject.toml` setup.
 ├── uv.lock                  # Locked dev dependencies
 ├── example.env              # Commented credential placeholders
 ├── integrations/            # cookbooks — see integrations/README.md
+├── data-management/         # bulk import + tenant migration — see data-management/README.md
 └── <recipes>                # .py scripts and .ipynb notebooks
 ```
 

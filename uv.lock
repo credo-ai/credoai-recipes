@@ -318,7 +318,6 @@ dev = [
     { name = "openpyxl" },
     { name = "pycredoai" },
     { name = "python-dotenv" },
-    { name = "requests" },
     { name = "ruff" },
 ]
 
@@ -331,7 +330,6 @@ dev = [
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pycredoai", specifier = ">=1.2.1" },
     { name = "python-dotenv", specifier = ">=1.2.3" },
-    { name = "requests", specifier = ">=2.34.2" },
     { name = "ruff", specifier = "==0.16.0" },
 ]
 
