@@ -88,7 +88,7 @@ Unmapped custom field labels are reported and skipped — fix them before runnin
 
 ## Step 4: Dry run
 
-Run from this folder (`data-management/use-case-bulk-import/`):
+Run from this folder (`data-migration/use-case-bulk-import/`):
 
 ```bash
 uv run python migrate.py --dry-run --questionnaire-key INTK1+1

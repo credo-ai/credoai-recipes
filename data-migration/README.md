@@ -1,6 +1,6 @@
-# Credo AI Data Management Recipes
+# Credo AI Data Migration Recipes
 
-Self-serve tools for managing your own Credo AI data: getting it into a tenant in bulk, and moving it between tenants.
+Self-serve tools for migrating your data into Credo AI: getting it into a tenant in bulk, and moving it between tenants.
 
 Unlike [integrations](../integrations/README.md), these aren't live connections to another system. You run them once, or now and then, when you need to load or move data.
 
@@ -27,7 +27,7 @@ From the repo root:
 ```bash
 mise install && uv sync
 cp example.env .local.env   # set CREDOAI_API_KEY, CREDOAI_TENANT, CREDOAI_API_URL
-cd data-management/use-case-bulk-import
+cd data-migration/use-case-bulk-import
 uv run python migrate.py --dry-run
 ```
 
@@ -49,7 +49,7 @@ Test against a sandbox tenant before running against production.
 
 ## Adding a recipe
 
-1. Create `data-management/<what-it-does>/`, using a kebab-case name for the job it does (for example `tenant-to-tenant-migration`), not the mechanism.
+1. Create `data-migration/<what-it-does>/`, using a kebab-case name for the job it does (for example `tenant-to-tenant-migration`), not the mechanism.
 2. Include a `README.md` with prerequisites, setup, a dry-run step, a real-run step, and troubleshooting. Use [Use Case Bulk Import](./use-case-bulk-import/README.md) as the model.
 3. Add dependencies to the root `dev` group with `uv add --group dev <package>`.
 4. Add a row to the table above and to the root [README](../README.md).

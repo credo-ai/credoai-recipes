@@ -5,7 +5,7 @@
 .env
 .local.env
 
-# data-management recipe run output
+# data-migration recipe run output
 migration_result.json
 
 node_modules/
