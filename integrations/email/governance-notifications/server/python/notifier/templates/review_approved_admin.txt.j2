@@ -1,0 +1,8 @@
+Hi{% if person.given_name %} {{ person.given_name }}{% endif %},
+
+The review of the use case "{{ entity.name }}" was approved{% if automated %} automatically,
+by the auto-approval rule{% endif %}. You're receiving this as a Credo AI admin.
+
+View the use case: {{ link }}
+
+{% include "_footer.txt.j2" %}

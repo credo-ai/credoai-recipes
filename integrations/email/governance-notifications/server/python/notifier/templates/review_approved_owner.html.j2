@@ -1,0 +1,11 @@
+{% extends "_layout.html.j2" %}
+{% block eyebrow %}Review approved{% endblock %}
+{% block heading %}{{ entity.name }}{% endblock %}
+{% block body %}
+                <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;">
+                  {% if automated %}The review of your use case was approved automatically, by your
+                  organization's auto-approval rule.{% else %}The review of your use case was
+                  approved.{% endif %}
+                </p>
+{% endblock %}
+{% block button %}View use case{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "_layout.html.j2" %}
+{% block eyebrow %}Workflow stage changed{% endblock %}
+{% block heading %}{{ entity.name }}{% endblock %}
+{% block body %}
+                <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;">
+                  Your use case moved {% if previous %}from <strong>{{ previous.name }}</strong> {% endif %}to
+                  <strong>{{ stage.name }}</strong>.
+                </p>
+                {% for paragraph in leaving + entering %}
+                <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;">{{ paragraph }}</p>
+                {% endfor %}
+{% endblock %}
+{% block button %}View use case{% endblock %}

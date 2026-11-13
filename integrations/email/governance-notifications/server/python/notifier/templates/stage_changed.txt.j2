@@ -1,0 +1,9 @@
+Hi{% if person.given_name %} {{ person.given_name }}{% endif %},
+
+Your use case "{{ entity.name }}" moved {% if previous %}from {{ previous.name }} {% endif %}to {{ stage.name }}.
+{% for paragraph in leaving + entering %}
+{{ paragraph }}
+{% endfor %}
+View the use case: {{ link }}
+
+{% include "_footer.txt.j2" %}

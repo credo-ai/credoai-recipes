@@ -1,0 +1,10 @@
+{% extends "_layout.html.j2" %}
+{% block eyebrow %}Ready for validation{% endblock %}
+{% block heading %}{{ entity.name }}{% endblock %}
+{% block body %}
+                <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;">
+                  Evidence for {% if control_key %}the control <strong>{{ control_key }}</strong>{% else %}a control{% endif %}
+                  on your use case is ready for validation.
+                </p>
+{% endblock %}
+{% block button %}Review the evidence{% endblock %}

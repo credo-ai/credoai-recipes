@@ -1,0 +1,8 @@
+Hi{% if person.given_name %} {{ person.given_name }}{% endif %},
+
+These questionnaires on the use cases you own are incomplete and due within {{ within_days }} days{% if overdue %}, or overdue{% endif %}:
+{% for item in items %}
+- {{ item.use_case }}: {{ item.questionnaire }}{% if item.total is not none %} ({{ item.answered }} of {{ item.total }} answered){% endif %}, due {{ item.due }}{% if item.overdue %} (OVERDUE){% endif %}
+  {{ item.link }}
+{% endfor %}
+{% include "_footer.txt.j2" %}

@@ -1,0 +1,22 @@
+{% extends "_layout.html.j2" %}
+{% block eyebrow %}Questionnaires due{% endblock %}
+{% block heading %}{{ items | length }} questionnaire{{ "s" if items | length != 1 }} due on your use cases{% endblock %}
+{% block body %}
+                <p style="margin:0 0 16px 0;font-size:14px;line-height:1.6;">
+                  These are incomplete and due within {{ within_days }} days{% if overdue %}, or overdue{% endif %}.
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:13px;line-height:1.5;">
+                  <tr style="color:#757582;text-align:left;">
+                    <th style="padding:6px 8px 6px 0;">Use case</th><th style="padding:6px 8px;">Questionnaire</th>
+                    <th style="padding:6px 8px;">Answered</th><th style="padding:6px 0 6px 8px;">Due</th>
+                  </tr>
+                  {% for item in items %}
+                  <tr style="border-top:1px solid #ebebf2;">
+                    <td style="padding:6px 8px 6px 0;">{{ item.use_case }}</td>
+                    <td style="padding:6px 8px;"><a href="{{ item.link }}" style="color:#7c03ca;">{{ item.questionnaire }}</a></td>
+                    <td style="padding:6px 8px;">{% if item.total is not none %}{{ item.answered }} of {{ item.total }}{% else %}—{% endif %}</td>
+                    <td style="padding:6px 0 6px 8px;{% if item.overdue %}color:#c4320a;{% endif %}">{{ item.due }}{% if item.overdue %} (overdue){% endif %}</td>
+                  </tr>
+                  {% endfor %}
+                </table>
+{% endblock %}
