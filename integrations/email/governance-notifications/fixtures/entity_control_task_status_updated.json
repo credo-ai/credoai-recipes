@@ -1,0 +1,34 @@
+{
+  "data": {
+    "assignedTeamIds": [],
+    "assignedUserIds": [
+      "AssignedUser1000000000"
+    ],
+    "controlKey": "CO-DEPLOYER.C6",
+    "controlVersion": null,
+    "entityControlId": "EntityControl100000000",
+    "entityId": "Entity2000000000000000",
+    "entityType": "use_case",
+    "eventType": "entity_control_task_status_updated",
+    "policyPackKey": "CO-DEPLOYER",
+    "previousStatus": "todo",
+    "previousSubStatus": "none",
+    "status": "in_progress",
+    "subStatus": "ready_for_validation",
+    "taskId": "Task100000000000000000",
+    "useCaseId": "UseCase100000000000000",
+    "user": {
+      "email": "jane.doe@example.com",
+      "familyName": null,
+      "givenName": null,
+      "job": null,
+      "nickname": null,
+      "role": "reviewer",
+      "userId": "AssignedUser1000000000"
+    }
+  },
+  "source": "CredoAI",
+  "subject": "entity_control_task_status_updated",
+  "time": "2026-10-16T00:28:25.758290Z",
+  "type": "entity_control_task_status_updated"
+}

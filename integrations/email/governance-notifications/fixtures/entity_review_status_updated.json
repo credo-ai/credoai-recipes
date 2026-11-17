@@ -1,0 +1,24 @@
+{
+  "data": {
+    "automated": false,
+    "entityId": "Entity2000000000000000",
+    "entityType": "use_case",
+    "eventType": "entity_review_status_updated",
+    "reviewId": "Review1000000000000000",
+    "status": "approved",
+    "useCaseId": "UseCase100000000000000",
+    "user": {
+      "email": "jane.doe@example.com",
+      "familyName": null,
+      "givenName": null,
+      "job": null,
+      "nickname": null,
+      "role": "admin",
+      "userId": "User100000000000000000"
+    }
+  },
+  "source": "CredoAI",
+  "subject": "entity_review_status_updated",
+  "time": "2026-10-16T00:29:47.119851Z",
+  "type": "entity_review_status_updated"
+}
