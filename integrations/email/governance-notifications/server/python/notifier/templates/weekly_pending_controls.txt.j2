@@ -1,0 +1,8 @@
+Hi{% if person.given_name %} {{ person.given_name }}{% endif %},
+
+{{ items | length }} control{{ "s" if items | length != 1 }} on the use cases you own still need{{ "s" if items | length == 1 }} evidence{% if overdue %} ({{ overdue }} overdue){% endif %}:
+{% for item in items %}
+- {{ item.use_case }}: {{ item.control }} ({{ item.state }}{% if item.due %}, due {{ item.due }}{% if item.overdue %}, OVERDUE{% endif %}{% endif %})
+  {{ item.link }}
+{% endfor %}
+{% include "_footer.txt.j2" %}

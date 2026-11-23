@@ -1,21 +1,21 @@
 {
-  "type": "entity_created",
-  "time": "2026-10-13T22:00:00.000000Z",
-  "subject": "entity_created",
-  "source": "CredoAI",
   "data": {
-    "entityId": "00000000-0000-0000-0000-000000000001",
+    "entityId": "Entity1000000000000000",
     "entityType": "model",
-    "modelId": "replace-with-a-real-model-id",
     "eventType": "entity_created",
+    "modelId": "Model10000000000000000",
     "user": {
-      "userId": "00000000-0000-0000-0000-000000000002",
       "email": "jane.doe@example.com",
-      "role": "admin",
+      "familyName": null,
+      "givenName": null,
       "job": null,
-      "familyName": "Doe",
-      "givenName": "Jane",
-      "nickname": "jane"
+      "nickname": null,
+      "role": "admin",
+      "userId": "User100000000000000000"
     }
-  }
+  },
+  "source": "CredoAI",
+  "subject": "entity_created",
+  "time": "2026-10-16T00:28:37.513102Z",
+  "type": "entity_created"
 }

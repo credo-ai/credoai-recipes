@@ -1,0 +1,22 @@
+# Wording for the stage-change emails (scenarios #1 and #4). Edit freely; the
+# server reads this file when it starts.
+#
+# Entries under `stages` are keyed by a workflow stage's id or its name (an id
+# wins; names match case-insensitively). `on_enter` is used when a use case
+# moves into the stage, `on_leave` when it moves out. A move sends the owners
+# one email: the old stage's `on_leave`, then the new stage's `on_enter`.
+# `default` fills in any hook a stage doesn't set (so moving into Intake still
+# gets `default.on_enter`); set a hook to "" to opt a stage out. A move with no
+# wording at all sends nothing, so remove `default.on_enter` to email only for
+# listed stages.
+#
+# Plain text. Blank lines start a new paragraph.
+default:
+  on_enter: >-
+    Open the use case to see what this stage needs from you.
+stages:
+  Intake:
+    on_leave: >-
+      Your use case has been approved out of Intake. Thank you for the
+      details you provided; the governance team will be in touch if anything
+      else is needed.
