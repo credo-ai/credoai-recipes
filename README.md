@@ -27,10 +27,10 @@ See [integrations/README.md](./integrations/README.md) for the full quick start.
 
 ## Data Migration
 
-| Recipe                                                        | What it does                                                                                                            | Status         |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------- |
-| [Use Case Bulk Import](./data-migration/use-case-bulk-import) | Upload a spreadsheet of use cases (plus models, vendors, questionnaire answers, custom fields, and risk scenario links) | ✅ Available   |
-| Tenant-to-Tenant Migration                                    | Copy governance data from one Credo AI tenant to another                                                                | 🚧 In progress |
+| Recipe                                                                    | What it does                                                                                                            | Status       |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------ |
+| [Use Case Bulk Import](./data-migration/use-case-bulk-import)             | Upload a spreadsheet of use cases (plus models, vendors, questionnaire answers, custom fields, and risk scenario links) | ✅ Available |
+| [Tenant-to-Tenant Migration](./data-migration/tenant-to-tenant-migration) | Copy governance data from one Credo AI tenant to another                                                                | ✅ Available |
 
 See [data-migration/README.md](./data-migration/README.md) for which one to use and the conventions they share.
 
