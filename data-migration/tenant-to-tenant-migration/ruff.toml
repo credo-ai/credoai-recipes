@@ -1,0 +1,20 @@
+# Lint and format settings for the kit. Matches the credoai-recipes repo's rules, with longer lines.
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = [
+    "E",       # pycodestyle errors
+    "W",       # pycodestyle warnings
+    "F",       # pyflakes
+    "I",       # isort
+    "C4",      # flake8-comprehensions
+    "ARG001",  # unused function arguments
+]
+ignore = [
+    "E501",  # line too long, handled by the formatter
+]
+
+[lint.per-file-ignores]
+# Test stand-ins keep the signature of the function they replace.
+"tests/*" = ["ARG001"]

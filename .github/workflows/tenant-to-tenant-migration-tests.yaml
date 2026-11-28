@@ -1,0 +1,33 @@
+name: Tenant-to-Tenant Migration tests
+# The kit has its own requirements.txt, so it runs its tests in its own virtual environment.
+# The tests use fake API objects: no keys or tenant access needed.
+on:
+  pull_request:
+    paths:
+    - data-migration/tenant-to-tenant-migration/**
+    - .github/workflows/tenant-to-tenant-migration-tests.yaml
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: data-migration/tenant-to-tenant-migration
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v7
+    - name: Install mise
+      uses: jdx/mise-action@v4
+      with:
+        install: true
+        cache: true
+    - name: Install the kit's requirements
+      run: |
+        python -m venv .venv
+        .venv/bin/pip install -r requirements.txt
+    - name: Run the kit's tests
+      run: .venv/bin/python -m pytest -q
